@@ -3232,6 +3232,18 @@ impl TypeChecker {
             ),
         );
         fns.insert(
+            "sql_exec_plain".into(),
+            Type::Fn(vec![Type::SqlDB, Type::String], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "sql_exec_str4".into(),
+            Type::Fn(vec![Type::SqlDB, Type::String, Type::String, Type::String, Type::String, Type::String], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "sql_query_str".into(),
+            Type::Fn(vec![Type::SqlDB, Type::String, Type::String], Box::new(Type::String)),
+        );
+        fns.insert(
             "sql_begin".into(),
             Type::Fn(vec![Type::SqlDB], Box::new(Type::Int)),
         );

@@ -270,6 +270,41 @@ fn main() {
 }
 ```
 
+### Unified SQL CRUD with String Data
+
+Use `sql_exec_str4` for text inserts and `sql_query_str` for text lookups via
+the unified `SqlDB` handle:
+
+```mko
+fn main() {
+    let db = sql_open_sqlite("/tmp/mako_crud.db")
+
+    // Create table (no parameters needed)
+    let _ = sql_exec_plain(db, "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT, email TEXT, role TEXT, team TEXT)")
+
+    // Insert rows with string parameters
+    let _ = sql_exec_str4(db, "INSERT INTO users(name, email, role, team) VALUES ($1, $2, $3, $4)", "Ada", "ada@example.com", "engineer", "platform")
+    let _ = sql_exec_str4(db, "INSERT INTO users(name, email, role, team) VALUES ($1, $2, $3, $4)", "Grace", "grace@example.com", "lead", "infra")
+
+    // Query a single text value
+    let role = sql_query_str(db, "SELECT role FROM users WHERE name = $1", "Ada")
+    print(role)   // engineer
+
+    // Update with string params (unused params can be empty strings)
+    let _ = sql_exec_str4(db, "UPDATE users SET role = $1 WHERE name = $2", "senior engineer", "Ada", "", "")
+
+    // Verify update
+    let updated = sql_query_str(db, "SELECT role FROM users WHERE name = $1", "Ada")
+    print(updated)   // senior engineer
+
+    // Delete
+    let _ = sql_exec_plain(db, "DELETE FROM users WHERE name = 'Grace'")
+
+    sql_close(db)
+    let _ = remove_file("/tmp/mako_crud.db")
+}
+```
+
 ### Postgres (when libpq is available)
 
 ```mko

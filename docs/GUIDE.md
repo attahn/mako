@@ -1691,6 +1691,28 @@ crew t {
 // (examples/testing/redis_kv_test.mko)
 ```
 
+Unified SQL facade (`sql_open_sqlite` / `sql_open_postgres` → `SqlDB`):
+
+```mko
+let db = sql_open_sqlite("/tmp/app.db")
+
+// DDL or simple statements (no parameters)
+let _ = sql_exec_plain(db, "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
+
+// Insert with up to 4 string parameters ($1..$4 for Postgres, ? for SQLite)
+let _ = sql_exec_str4(db, "INSERT INTO users(name, email, '', '') VALUES ($1, $2, $3, $4)", "Ada", "ada@example.com", "", "")
+
+// Query a single string value (first column, first row)
+let name = sql_query_str(db, "SELECT name FROM users WHERE email = $1", "ada@example.com")
+print(name)  // Ada
+
+sql_close(db)
+```
+
+`sql_exec_plain` returns 0 on success; `sql_exec_str4` returns 0 on success (uses parameterized
+queries for safety); `sql_query_str` returns `""` if no rows match. These complement
+`sql_exec(db, sql, []int)` which only supports integer parameters.
+
 Postgres: libpq `pg_connect` is available (fails gracefully when server down).
 `pg_connect_url` parses URLs; `pg_exec_row_count` returns -1 when disconnected.
 

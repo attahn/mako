@@ -406,7 +406,10 @@ Same call shape for sqlite and postgres (`?` placeholders; postgres rewritten to
 | `sql_open_sqlite(path)` / `sql_open_postgres(url)` | open → `SqlDB` |
 | `sql_ok` / `sql_close` | status / close |
 | `sql_query_int(db, sql, []int)` | parameterized query → int |
-| `sql_exec(db, sql, []int)` | parameterized exec |
+| `sql_exec(db, sql, []int)` | parameterized exec (integer params) |
+| `sql_exec_plain(db, sql)` | exec with no parameters (DDL, simple statements); returns 0 on success |
+| `sql_exec_str4(db, sql, p1, p2, p3, p4)` | exec with up to 4 string parameters ($1..$4); returns 0 on success |
+| `sql_query_str(db, sql, p1)` | query single string value (first col, first row) with one string param; returns "" if empty |
 | `sql_begin` / `sql_commit` / `sql_rollback` | transaction boundaries |
 | `sql_prepare` / `sql_stmt_query_int` / `sql_stmt_exec` / `sql_stmt_close` | prepared statement handles |
 | `sql_migration_applied` / `sql_migrate` | numeric-version migration table and transactional apply |

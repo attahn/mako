@@ -348,6 +348,14 @@ Supported patterns: literals, `.`, `*`, `+`, `?`, `|`, `[abc]`, `[a-z]`,
 | `json_array_len`         | Array element count                   |
 | `json_object_from_map_ss` | Map[string]string to JSON object     |
 
+### Database (Unified SQL)
+
+| Function          | Signature                                                        | Purpose              |
+|-------------------|------------------------------------------------------------------|----------------------|
+| `sql_exec_plain`  | `(db: SqlDB, sql: string) -> int`                                | Execute SQL with no parameters (DDL, simple statements); returns 0 on success |
+| `sql_exec_str4`   | `(db: SqlDB, sql: string, p1: string, p2: string, p3: string, p4: string) -> int` | Execute SQL with up to 4 string parameters ($1..$4); returns 0 on success |
+| `sql_query_str`   | `(db: SqlDB, sql: string, p1: string) -> string`                 | Query single string value (first column, first row) with one string param; returns "" if no result |
+
 ### UUID
 
 | Function          | Signature                        | Purpose              |

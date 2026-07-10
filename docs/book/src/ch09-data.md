@@ -540,6 +540,40 @@ fn handle_create_user(body: string) -> string {
 }
 ```
 
+### Unified SQL with String Parameters
+
+The unified `sql_*` functions work with both SQLite and Postgres through a single
+`SqlDB` handle. Use `sql_exec_plain` for DDL, `sql_exec_str4` for parameterized
+inserts with text values, and `sql_query_str` to retrieve a single string result:
+
+```mko
+fn main() {
+    let db = sql_open_sqlite("/tmp/mako_unified.db")
+
+    // DDL — no parameters needed
+    let _ = sql_exec_plain(db, "CREATE TABLE IF NOT EXISTS contacts(id INTEGER PRIMARY KEY, name TEXT, email TEXT, phone TEXT, city TEXT)")
+
+    // INSERT with string parameters (up to 4)
+    let _ = sql_exec_str4(db, "INSERT INTO contacts(name, email, phone, city) VALUES ($1, $2, $3, $4)", "Ada", "ada@example.com", "+1-555-0100", "London")
+    let _ = sql_exec_str4(db, "INSERT INTO contacts(name, email, phone, city) VALUES ($1, $2, $3, $4)", "Grace", "grace@example.com", "+1-555-0200", "New York")
+
+    // SELECT returning a text value
+    let email = sql_query_str(db, "SELECT email FROM contacts WHERE name = $1", "Ada")
+    print(email)    // ada@example.com
+
+    // Returns "" when no rows match
+    let missing = sql_query_str(db, "SELECT email FROM contacts WHERE name = $1", "Nobody")
+    print(missing)  // (empty string)
+
+    sql_close(db)
+    let _ = remove_file("/tmp/mako_unified.db")
+}
+```
+
+These three functions complement `sql_exec(db, sql, []int)` which only supports
+integer parameters. Use `sql_exec_str4` whenever you need to insert or update
+text columns with user-supplied data safely.
+
 ### Multi-store pattern
 
 Use the unified SQL interface for SQLite and Postgres interchangeably:

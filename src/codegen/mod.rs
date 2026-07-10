@@ -6681,6 +6681,28 @@ impl Codegen {
                             let (_, a) = self.emit_expr(&args[2]);
                             return ("int64_t".into(), format!("mako_sql_exec({d}, {q}, {a})"));
                         }
+                        "sql_exec_plain" => {
+                            let (_, d) = self.emit_expr(&args[0]);
+                            let (_, q) = self.emit_expr(&args[1]);
+                            return ("int64_t".into(), format!("mako_sql_exec_plain({d}, {q})"));
+                        }
+                        "sql_exec_str4" => {
+                            let (_, d) = self.emit_expr(&args[0]);
+                            let (_, q) = self.emit_expr(&args[1]);
+                            let (_, p1) = self.emit_expr(&args[2]);
+                            let (_, p2) = self.emit_expr(&args[3]);
+                            let (_, p3) = self.emit_expr(&args[4]);
+                            let (_, p4) = self.emit_expr(&args[5]);
+                            return ("int64_t".into(), format!("mako_sql_exec_str4({d}, {q}, {p1}, {p2}, {p3}, {p4})"));
+                        }
+                        "sql_query_str" => {
+                            let (_, d) = self.emit_expr(&args[0]);
+                            let (_, q) = self.emit_expr(&args[1]);
+                            let (_, p1) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("sqs");
+                            self.line(&format!("MakoString {tmp} = mako_sql_query_str({d}, {q}, {p1});"));
+                            return ("MakoString".into(), tmp);
+                        }
                         "sql_begin" => {
                             let (_, d) = self.emit_expr(&args[0]);
                             return ("int64_t".into(), format!("mako_sql_begin({d})"));

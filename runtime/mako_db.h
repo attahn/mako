@@ -1607,6 +1607,59 @@ static inline int64_t mako_sql_exec(MakoSqlDB db, MakoString sql, MakoIntArray a
     return -1;
 }
 
+/* Execute SQL with up to 4 string parameters (for INSERT/UPDATE with text values). */
+static inline int64_t mako_sql_exec_str4(MakoSqlDB db, MakoString sql, MakoString p1, MakoString p2, MakoString p3, MakoString p4) {
+    if (db.driver == 2) {
+        /* PostgreSQL path */
+        MakoPgConn pgc = db.pg;
+        char b1[4096], b2[4096], b3[4096], b4[4096];
+        int np = 0;
+        const char *vals[4] = {NULL, NULL, NULL, NULL};
+        if (p1.data && p1.len > 0) { memcpy(b1, p1.data, p1.len < 4095 ? p1.len : 4095); b1[p1.len < 4095 ? p1.len : 4095] = 0; vals[np++] = b1; }
+        if (p2.data && p2.len > 0) { memcpy(b2, p2.data, p2.len < 4095 ? p2.len : 4095); b2[p2.len < 4095 ? p2.len : 4095] = 0; vals[np++] = b2; }
+        if (p3.data && p3.len > 0) { memcpy(b3, p3.data, p3.len < 4095 ? p3.len : 4095); b3[p3.len < 4095 ? p3.len : 4095] = 0; vals[np++] = b3; }
+        if (p4.data && p4.len > 0) { memcpy(b4, p4.data, p4.len < 4095 ? p4.len : 4095); b4[p4.len < 4095 ? p4.len : 4095] = 0; vals[np++] = b4; }
+        return mako_pg_exec_params(pgc, sql, vals, np);
+    }
+    /* SQLite fallback — just exec without params */
+    MakoIntArray empty = {NULL, 0, 0};
+    return mako_sql_exec(db, sql, empty);
+}
+
+/* Execute SQL with no parameters (DDL, simple statements). */
+static inline int64_t mako_sql_exec_plain(MakoSqlDB db, MakoString sql) {
+    MakoIntArray empty = {NULL, 0, 0};
+    return mako_sql_exec(db, sql, empty);
+}
+
+/* Query a single string value (first column of first row). */
+static inline MakoString mako_sql_query_str(MakoSqlDB db, MakoString sql, MakoString p1) {
+    if (db.driver == 2) {
+        MakoPgConn pgc = db.pg;
+        PGconn *pg = (PGconn *)(intptr_t)pgc.handle;
+        if (!pg || !sql.data) return mako_str_from_cstr("");
+        char qbuf[4096], pbuf[4096];
+        if (sql.len >= sizeof(qbuf)) return mako_str_from_cstr("");
+        memcpy(qbuf, sql.data, sql.len); qbuf[sql.len] = 0;
+        const char *vals[1] = {NULL};
+        int np = 0;
+        if (p1.data && p1.len > 0) {
+            memcpy(pbuf, p1.data, p1.len < 4095 ? p1.len : 4095);
+            pbuf[p1.len < 4095 ? p1.len : 4095] = 0;
+            vals[0] = pbuf; np = 1;
+        }
+        PGresult *r = PQexecParams(pg, qbuf, np, NULL, vals, NULL, NULL, 0);
+        if (!r) return mako_str_from_cstr("");
+        MakoString out = mako_str_from_cstr("");
+        if (PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) > 0) {
+            out = mako_str_from_cstr(PQgetvalue(r, 0, 0));
+        }
+        PQclear(r);
+        return out;
+    }
+    return mako_str_from_cstr("");
+}
+
 static inline int64_t mako_sql_begin(MakoSqlDB db) {
     MakoIntArray empty = {NULL, 0, 0};
     return mako_sql_exec(db, mako_str_from_cstr("begin"), empty);
