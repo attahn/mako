@@ -62,6 +62,61 @@ Runtime: `mako_rt.h` + `mako_goext.h` (Waves 1–9). Tests: `goext_wave{,3,4,5,6
 
 ---
 
+## Event Loop (`mako_evloop.h`)
+
+Non-blocking I/O multiplexing (epoll/kqueue):
+
+| Builtin | Role |
+|---------|------|
+| `evloop_new` / `evloop_close` | Create / destroy event loop |
+| `evloop_add` / `evloop_mod` / `evloop_del` | Register / modify / remove fd |
+| `evloop_wait(el, timeout_ms)` | Wait for events, returns count |
+| `evloop_event_fd` / `evloop_event_flags` | Inspect ready events by index |
+| `nb_listen` / `nb_accept` / `nb_read` / `nb_write` / `nb_close` | Non-blocking TCP helpers |
+| `nb_udp_bind` / `nb_udp_recv` | Non-blocking UDP helpers |
+
+---
+
+## Game UDP (`mako_game.h`)
+
+High-performance UDP networking for game servers:
+
+| Builtin | Role |
+|---------|------|
+| `game_udp_bind` / `game_udp_close` | Bind / close game UDP socket |
+| `game_udp_recv` / `game_udp_sender` | Receive packet, get sender peer ID |
+| `game_udp_send` / `game_udp_broadcast` | Send to peer / broadcast to all |
+| `game_udp_kick` / `game_udp_peers` | Disconnect peer / count peers |
+| `game_udp_fd` | Raw fd for event loop integration |
+| `tick_now_us` / `tick_sleep_us` | Microsecond tick timing |
+
+---
+
+## Cloud / Distributed (`mako_cloud.h`)
+
+Primitives for distributed services:
+
+| Builtin | Role |
+|---------|------|
+| `chash_new` / `chash_get` / `chash_add_node` / `chash_remove_node` / `chash_node_count` / `chash_free` | Consistent hash ring |
+| `ratelimit_new` / `ratelimit_allow` / `ratelimit_remaining` / `ratelimit_free` | Token-bucket rate limiter |
+| `breaker_new` / `breaker_allow` / `breaker_success` / `breaker_failure` / `breaker_state` / `breaker_reset` / `breaker_free` | Circuit breaker |
+
+---
+
+## HTTP Engine (`mako_httpengine.h`)
+
+High-level HTTP server with declarative routing:
+
+| Builtin | Role |
+|---------|------|
+| `httpengine_new` / `httpengine_free` | Create / destroy engine |
+| `httpengine_route(e, method, path, handler_id)` | Register route |
+| `httpengine_start(e, port)` | Start listening |
+| `httpengine_stop(e)` | Stop engine |
+
+---
+
 ## Core APIs (Wave 1–9)
 
 | Builtin | Package |
@@ -120,6 +175,45 @@ Runtime: `mako_rt.h` + `mako_goext.h` (Waves 1–9). Tests: `goext_wave{,3,4,5,6
 | `graphql_field` / `graphql_arg` / `graphql_data` / `graphql_error` / `graphql_request` / `graphql_is_mutation` | GraphQL request parsing and response seed helpers |
 | `sse_event` / `sse_retry` / `rpc_frame` / `rpc_method` / `rpc_payload` | SSE and streaming RPC wire helpers |
 | `io_read_ready` / `io_write_ready` / `io_set_nonblocking` / `io_try_write` / `io_backoff_ms` / `io_should_pause` | backpressure-aware readiness, nonblocking write, and retry policy helpers |
+
+---
+
+## `dio` (Direct I/O)
+
+Low-level unbuffered file operations and memory-mapped files (`runtime/mako_dio.h`):
+
+| Builtin | Role |
+|---------|------|
+| `file_open` / `file_close` | open/close file descriptors |
+| `pread` / `pwrite` | positional read/write (no seek side-effect) |
+| `file_append` | append to fd |
+| `fsync` / `fdatasync` | flush to disk (data+meta / data-only) |
+| `fallocate` / `file_truncate` | pre-allocate / truncate |
+| `file_size` / `file_seek` / `file_read_exact` | size, seek, exact read |
+| `mmap_open` / `mmap_create` | map existing or new file |
+| `mmap_read` / `mmap_write` / `mmap_sync` | read/write/flush mapping |
+| `mmap_size` / `mmap_close` | size / unmap |
+
+Tests: `examples/testing/dio_test.mko`. Header: `runtime/mako_dio.h`.
+
+---
+
+## `buf` (Binary Buffer)
+
+Structured binary read/write for protocols and file formats (`runtime/mako_buf.h`):
+
+| Builtin | Role |
+|---------|------|
+| `buf_pack_new(cap)` / `buf_from_string(s)` | create buffer |
+| `buf_to_string(b)` | extract contents |
+| `buf_len` / `buf_pos` / `buf_reset` / `buf_seek` / `buf_free` | navigation/lifecycle |
+| `buf_write_u8/u16/u32/u64/i32/f32/f64` | write typed values (LE) |
+| `buf_write_u16be/u32be` | write big-endian |
+| `buf_read_u8/u16/u32/u64/i32/f32/f64` | read typed values (LE) |
+| `buf_read_u16be/u32be` | read big-endian |
+| `buf_write_bytes/str` / `buf_read_bytes/str` | raw byte/string I/O |
+
+Tests: `examples/testing/buf_test.mko`. Header: `runtime/mako_buf.h`.
 
 ---
 

@@ -446,6 +446,87 @@ patterns, prefer CMap over channel-based coordination.
 
 ---
 
+## Rate Limiting and Circuit Breaking
+
+For distributed services, Mako provides two safety primitives that protect
+systems from overload and cascading failures (`runtime/mako_cloud.h`).
+
+### Rate Limiter
+
+The `RateLimiter` type implements a token-bucket algorithm. It prevents callers
+from exceeding a defined request rate:
+
+```mko
+fn main() {
+    // Allow 100 requests/second with a burst of 10
+    let rl = ratelimit_new(100, 10)
+
+    let mut allowed = 0
+    let mut rejected = 0
+    for _ in range 20 {
+        if ratelimit_allow(rl) == 1 {
+            allowed = allowed + 1
+        } else {
+            rejected = rejected + 1
+        }
+    }
+    print_int(allowed)              // up to 10 (burst)
+    print_int(rejected)             // remainder
+    print_int(ratelimit_remaining(rl))
+    ratelimit_free(rl)
+}
+```
+
+Use rate limiters at API boundaries to prevent abuse and ensure fair resource
+sharing between clients.
+
+### Circuit Breaker
+
+The `CircuitBreaker` type prevents repeated calls to a failing downstream
+service. After a threshold of failures, the breaker opens and rejects requests
+immediately (fail-fast), protecting both the caller and the downstream:
+
+```mko
+fn call_downstream(cb: CircuitBreaker) -> int {
+    if breaker_allow(cb) == 0 {
+        return -1  // circuit open, fail fast
+    }
+    // Attempt the call...
+    let success = 0  // simulate failure
+    if success == 1 {
+        breaker_success(cb)
+    } else {
+        breaker_failure(cb)
+    }
+    return success
+}
+
+fn main() {
+    // Open after 5 failures; wait 30s before half-open; allow 3 probes
+    let cb = breaker_new(5, 30000, 3)
+    for _ in range 10 {
+        let _ = call_downstream(cb)
+    }
+    // After 5 failures, state transitions to open
+    print_int(breaker_state(cb))  // 1 (open)
+    breaker_reset(cb)
+    print_int(breaker_state(cb))  // 0 (closed)
+    breaker_free(cb)
+}
+```
+
+Circuit breaker states:
+- **0 (closed)**: Normal operation. Failures are counted.
+- **1 (open)**: Too many failures. All requests rejected immediately.
+- **2 (half-open)**: After timeout expires, a limited number of probe requests
+  are allowed through. If they succeed, the breaker closes; if they fail, it
+  reopens.
+
+These primitives complement the memory-safety guarantees with operational
+safety for networked services.
+
+---
+
 ## Memory Safety Contract Summary
 
 | Risk               | Prevention                                  |

@@ -661,4 +661,133 @@ fn main() {
 }
 ```
 
+---
+
+## Direct I/O (dio)
+
+For performance-critical file access -- storage engines, databases, log-structured
+merge trees -- Mako provides unbuffered (direct) I/O through the `dio` subsystem.
+These functions bypass the standard buffered layer and operate directly on file
+descriptors.
+
+```mko
+fn main() {
+    // Open, write, sync, close
+    let fd = file_open("/tmp/dio_demo.dat", 1, 0)
+    let _ = pwrite(fd, "record-001\n", 0)
+    let _ = fdatasync(fd)
+    let _ = file_close(fd)
+
+    // Re-open and read back
+    let fd2 = file_open("/tmp/dio_demo.dat", 0, 0)
+    let data = pread(fd2, 11, 0)
+    print(data)   // "record-001\n"
+    let _ = file_close(fd2)
+}
+```
+
+Key functions:
+
+| Function | Purpose |
+|----------|---------|
+| `file_open(path, mode, flags)` | Open a file descriptor |
+| `file_close(fd)` | Close descriptor |
+| `pread(fd, count, offset)` | Read at position without seeking |
+| `pwrite(fd, data, offset)` | Write at position without seeking |
+| `file_append(fd, data)` | Append data to file |
+| `fsync(fd)` / `fdatasync(fd)` | Flush to disk (full / data-only) |
+| `fallocate(fd, size)` | Pre-allocate disk space |
+| `file_size(fd)` | Get file size |
+| `file_truncate(fd, size)` | Truncate file |
+| `file_seek(fd, offset, whence)` | Seek position |
+| `file_read_exact(fd, n)` | Read exactly n bytes |
+
+### Memory-Mapped Files (MMap)
+
+For random-access patterns (indexes, shared memory, large datasets), use
+memory-mapped files:
+
+```mko
+fn main() {
+    // Create a new mapped file
+    let m = mmap_create("/tmp/mako_index.dat", 65536)
+
+    // Write index entries at known offsets
+    let _ = mmap_write(m, 0, "idx:0001")
+    let _ = mmap_write(m, 4096, "idx:0002")
+    let _ = mmap_sync(m, 0)
+
+    // Read back
+    let entry = mmap_read(m, 0, 8)
+    print(entry)   // "idx:0001"
+
+    print_int(mmap_size(m))   // 65536
+    let _ = mmap_close(m)
+}
+```
+
+| Function | Purpose |
+|----------|---------|
+| `mmap_open(path, mode)` | Map an existing file |
+| `mmap_create(path, size)` | Create and map a new file |
+| `mmap_read(m, offset, count)` | Read from the mapping |
+| `mmap_write(m, offset, data)` | Write into the mapping |
+| `mmap_sync(m, flags)` | Flush changes to disk |
+| `mmap_size(m)` | Size of the mapping |
+| `mmap_close(m)` | Unmap and close |
+
+---
+
+## Binary Buffer (buf)
+
+The `Buf` type enables structured reading and writing of binary data. Use it for
+network protocols, file format parsers, and serialization layers.
+
+```mko
+fn main() {
+    // Build a binary message
+    let b = buf_pack_new(128)
+    buf_write_u8(b, 0x01)           // version byte
+    buf_write_u32(b, 42)            // payload length
+    buf_write_str(b, "hello")       // payload
+    let wire = buf_to_string(b)
+    buf_free(b)
+
+    // Parse the message
+    let r = buf_from_string(wire)
+    let version = buf_read_u8(r)
+    let length = buf_read_u32(r)
+    let payload = buf_read_str(r, 5)
+    print_int(version)   // 1
+    print_int(length)    // 42
+    print(payload)       // "hello"
+    buf_free(r)
+}
+```
+
+Key operations:
+
+| Function | Purpose |
+|----------|---------|
+| `buf_pack_new(capacity)` | Create a new write buffer |
+| `buf_from_string(s)` | Create a read buffer from bytes |
+| `buf_to_string(b)` | Extract buffer contents |
+| `buf_len(b)` / `buf_pos(b)` | Total length / read position |
+| `buf_reset(b)` / `buf_seek(b, pos)` | Reset or seek |
+| `buf_free(b)` | Release buffer memory |
+| `buf_write_u8` ... `buf_write_u64` | Write unsigned ints (LE) |
+| `buf_write_u16be` / `buf_write_u32be` | Write big-endian |
+| `buf_write_i32` / `buf_write_f32` / `buf_write_f64` | Write signed/float |
+| `buf_read_u8` ... `buf_read_u64` | Read unsigned ints (LE) |
+| `buf_read_u16be` / `buf_read_u32be` | Read big-endian |
+| `buf_read_i32` / `buf_read_f32` / `buf_read_f64` | Read signed/float |
+| `buf_write_bytes` / `buf_write_str` | Write raw data |
+| `buf_read_bytes(b, n)` / `buf_read_str(b, n)` | Read n bytes |
+
+Big-endian variants are essential for network protocols (which typically use
+network byte order). Little-endian is the default for on-disk formats on modern
+hardware.
+
+---
+
 Next: [Networking & HTTP](ch08-networking.md).

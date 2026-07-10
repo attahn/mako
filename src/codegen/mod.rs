@@ -238,6 +238,11 @@ impl Codegen {
         self.out.push_str("#include \"mako_ws.h\"\n");
         self.out.push_str("#include \"mako_db.h\"\n");
         self.out.push_str("#include \"mako_cmap.h\"\n");
+        self.out.push_str("#include \"mako_dio.h\"\n");
+        self.out.push_str("#include \"mako_evloop.h\"\n");
+        self.out.push_str("#include \"mako_game.h\"\n");
+        self.out.push_str("#include \"mako_cloud.h\"\n");
+        self.out.push_str("#include \"mako_httpengine.h\"\n");
         self.out.push_str("#endif /* MAKO_WASI */\n\n");
 
         // Collect interfaces for method dispatch sugar
@@ -855,6 +860,14 @@ impl Codegen {
                 "Mutex" => "MakoMutex*".into(),
                 "RWMutex" => "MakoRWMutex*".into(),
                 "CMap" => "MakoCMap*".into(),
+                "MMap" => "MakoMMap*".into(),
+                "EvLoop" => "MakoEvLoop*".into(),
+                "Buf" => "MakoBuf*".into(),
+                "GameUDP" => "MakoGameUDP*".into(),
+                "CHash" => "MakoCHash*".into(),
+                "RateLimiter" => "MakoRateLimiter*".into(),
+                "CircuitBreaker" => "MakoCircuitBreaker*".into(),
+                "HttpEngine" => "MakoHttpEngine*".into(),
                 "BufReader" => "MakoBufReader*".into(),
                 "BufWriter" => "MakoBufWriter*".into(),
                 "HttpRequest" => "MakoHttpRequest".into(),
@@ -2541,6 +2554,640 @@ impl Codegen {
                             let tmp = self.fresh("ci");
                             self.line(&format!("int64_t {tmp} = mako_cmap_incr({m}, {k}, {d});"));
                             return ("int64_t".into(), tmp);
+                        }
+                        // Direct I/O
+                        "file_open" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let (_, m) = self.emit_expr(&args[1]);
+                            let (_, f) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("fo");
+                            self.line(&format!("int64_t {tmp} = mako_file_open({p}, {m}, {f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "file_close" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("fc");
+                            self.line(&format!("int64_t {tmp} = mako_file_close({f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "pread" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, c) = self.emit_expr(&args[1]);
+                            let (_, o) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("pr");
+                            self.line(&format!("MakoString {tmp} = mako_pread({f}, {c}, {o});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "pwrite" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, d) = self.emit_expr(&args[1]);
+                            let (_, o) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("pw");
+                            self.line(&format!("int64_t {tmp} = mako_pwrite({f}, {d}, {o});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "file_append" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, d) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("fa");
+                            self.line(&format!("int64_t {tmp} = mako_file_append({f}, {d});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "fsync" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("fs");
+                            self.line(&format!("int64_t {tmp} = mako_fsync({f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "fdatasync" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("fds");
+                            self.line(&format!("int64_t {tmp} = mako_fdatasync({f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "fallocate" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, s) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("fal");
+                            self.line(&format!("int64_t {tmp} = mako_fallocate({f}, {s});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "file_size" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("fsz");
+                            self.line(&format!("int64_t {tmp} = mako_file_size({f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "file_truncate" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, s) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("ft");
+                            self.line(&format!("int64_t {tmp} = mako_file_truncate({f}, {s});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "file_seek" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, o) = self.emit_expr(&args[1]);
+                            let (_, w) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("fsk");
+                            self.line(&format!("int64_t {tmp} = mako_file_seek({f}, {o}, {w});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "file_read_exact" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, n) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("fre");
+                            self.line(&format!("MakoString {tmp} = mako_file_read_exact({f}, {n});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "mmap_open" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let (_, m) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("mm");
+                            self.line(&format!("MakoMMap *{tmp} = mako_mmap_open({p}, {m});"));
+                            return ("MakoMMap*".into(), tmp);
+                        }
+                        "mmap_create" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let (_, s) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("mc");
+                            self.line(&format!("MakoMMap *{tmp} = mako_mmap_create({p}, {s});"));
+                            return ("MakoMMap*".into(), tmp);
+                        }
+                        "mmap_read" => {
+                            let (_, m) = self.emit_expr(&args[0]);
+                            let (_, o) = self.emit_expr(&args[1]);
+                            let (_, c) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("mr");
+                            self.line(&format!("MakoString {tmp} = mako_mmap_read({m}, {o}, {c});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "mmap_write" => {
+                            let (_, m) = self.emit_expr(&args[0]);
+                            let (_, o) = self.emit_expr(&args[1]);
+                            let (_, d) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("mw");
+                            self.line(&format!("int64_t {tmp} = mako_mmap_write({m}, {o}, {d});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "mmap_sync" => {
+                            let (_, m) = self.emit_expr(&args[0]);
+                            let (_, f) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("ms");
+                            self.line(&format!("int64_t {tmp} = mako_mmap_sync({m}, {f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "mmap_size" => {
+                            let (_, m) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("msz");
+                            self.line(&format!("int64_t {tmp} = mako_mmap_size({m});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "mmap_close" => {
+                            let (_, m) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("mcl");
+                            self.line(&format!("int64_t {tmp} = mako_mmap_close({m});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        // Event loop
+                        "evloop_new" => {
+                            let tmp = self.fresh("el");
+                            self.line(&format!("MakoEvLoop *{tmp} = mako_evloop_new();"));
+                            return ("MakoEvLoop*".into(), tmp);
+                        }
+                        "evloop_add" => {
+                            let (_, el) = self.emit_expr(&args[0]);
+                            let (_, fd) = self.emit_expr(&args[1]);
+                            let (_, fl) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("ea");
+                            self.line(&format!("int64_t {tmp} = mako_evloop_add({el}, {fd}, {fl});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "evloop_mod" => {
+                            let (_, el) = self.emit_expr(&args[0]);
+                            let (_, fd) = self.emit_expr(&args[1]);
+                            let (_, fl) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("em");
+                            self.line(&format!("int64_t {tmp} = mako_evloop_mod({el}, {fd}, {fl});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "evloop_del" => {
+                            let (_, el) = self.emit_expr(&args[0]);
+                            let (_, fd) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("ed");
+                            self.line(&format!("int64_t {tmp} = mako_evloop_del({el}, {fd});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "evloop_wait" => {
+                            let (_, el) = self.emit_expr(&args[0]);
+                            let (_, t) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("ew");
+                            self.line(&format!("int64_t {tmp} = mako_evloop_wait({el}, {t});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "evloop_event_fd" => {
+                            let (_, el) = self.emit_expr(&args[0]);
+                            let (_, i) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("ef");
+                            self.line(&format!("int64_t {tmp} = mako_evloop_event_fd({el}, {i});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "evloop_event_flags" => {
+                            let (_, el) = self.emit_expr(&args[0]);
+                            let (_, i) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("efl");
+                            self.line(&format!("int64_t {tmp} = mako_evloop_event_flags({el}, {i});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "evloop_close" => {
+                            let (_, el) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("ecl");
+                            self.line(&format!("int64_t {tmp} = mako_evloop_close({el});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "nb_listen" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("nl");
+                            self.line(&format!("int64_t {tmp} = mako_nb_listen({p});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "nb_accept" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("na");
+                            self.line(&format!("int64_t {tmp} = mako_nb_accept({f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "nb_read" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("nr");
+                            self.line(&format!("MakoString {tmp} = mako_nb_read({f});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "nb_write" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let (_, d) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("nw");
+                            self.line(&format!("int64_t {tmp} = mako_nb_write({f}, {d});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "nb_udp_bind" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("nub");
+                            self.line(&format!("int64_t {tmp} = mako_nb_udp_bind({p});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "nb_udp_recv" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("nur");
+                            self.line(&format!("MakoString {tmp} = mako_nb_udp_recv({f});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "nb_close" => {
+                            let (_, f) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("nc");
+                            self.line(&format!("int64_t {tmp} = mako_nb_close({f});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        // Binary buffer
+                        "buf_pack_new" => {
+                            let (_, c) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("bp");
+                            self.line(&format!("MakoBuf *{tmp} = mako_buf_new({c});"));
+                            return ("MakoBuf*".into(), tmp);
+                        }
+                        "buf_from_string" => {
+                            let (_, s) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("bfs");
+                            self.line(&format!("MakoBuf *{tmp} = mako_buf_from_string({s});"));
+                            return ("MakoBuf*".into(), tmp);
+                        }
+                        "buf_to_string" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("bts");
+                            self.line(&format!("MakoString {tmp} = mako_buf_to_string({b});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "buf_len" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("bl");
+                            self.line(&format!("int64_t {tmp} = mako_buf_len({b});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "buf_pos" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("bpo");
+                            self.line(&format!("int64_t {tmp} = mako_buf_pos({b});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "buf_reset" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_buf_reset({b});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "buf_seek" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let (_, p) = self.emit_expr(&args[1]);
+                            self.line(&format!("mako_buf_seek({b}, {p});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "buf_free" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_buf_free({b});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "buf_write_u8" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let (_, v) = self.emit_expr(&args[1]);
+                            self.line(&format!("mako_buf_write_u8({b}, {v});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "buf_write_u16" | "buf_write_u32" | "buf_write_u64" | "buf_write_i32" | "buf_write_u16be" | "buf_write_u32be" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let (_, v) = self.emit_expr(&args[1]);
+                            self.line(&format!("mako_{name}({b}, {v});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "buf_write_f32" | "buf_write_f64" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let (_, v) = self.emit_expr(&args[1]);
+                            self.line(&format!("mako_{name}({b}, {v});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "buf_write_bytes" | "buf_write_str" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let (_, s) = self.emit_expr(&args[1]);
+                            self.line(&format!("mako_{name}({b}, {s});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "buf_read_u8" | "buf_read_u16" | "buf_read_u32" | "buf_read_u64" | "buf_read_i32" | "buf_read_u16be" | "buf_read_u32be" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("br");
+                            self.line(&format!("int64_t {tmp} = mako_{name}({b});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "buf_read_f32" | "buf_read_f64" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("bf");
+                            self.line(&format!("double {tmp} = mako_{name}({b});"));
+                            return ("double".into(), tmp);
+                        }
+                        "buf_read_bytes" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let (_, n) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("brb");
+                            self.line(&format!("MakoString {tmp} = mako_buf_read_bytes({b}, {n});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "buf_read_str" => {
+                            let (_, b) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("brs");
+                            self.line(&format!("MakoString {tmp} = mako_buf_read_str({b});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        // Game UDP
+                        "game_udp_bind" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("gub");
+                            self.line(&format!("MakoGameUDP *{tmp} = mako_game_udp_bind({p});"));
+                            return ("MakoGameUDP*".into(), tmp);
+                        }
+                        "game_udp_recv" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("gur");
+                            self.line(&format!("MakoString {tmp} = mako_game_udp_recv({u});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "game_udp_sender" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("gus");
+                            self.line(&format!("int64_t {tmp} = mako_game_udp_sender({u});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "game_udp_send" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            let (_, p) = self.emit_expr(&args[1]);
+                            let (_, d) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("gsd");
+                            self.line(&format!("int64_t {tmp} = mako_game_udp_send({u}, {p}, {d});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "game_udp_broadcast" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            let (_, d) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("gbc");
+                            self.line(&format!("int64_t {tmp} = mako_game_udp_broadcast({u}, {d});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "game_udp_kick" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            let (_, p) = self.emit_expr(&args[1]);
+                            self.line(&format!("mako_game_udp_kick({u}, {p});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "game_udp_peers" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("gup");
+                            self.line(&format!("int64_t {tmp} = mako_game_udp_peers({u});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "game_udp_fd" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("guf");
+                            self.line(&format!("int64_t {tmp} = mako_game_udp_fd({u});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "game_udp_close" => {
+                            let (_, u) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_game_udp_close({u});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        // Tick timer
+                        "tick_now_us" => {
+                            let tmp = self.fresh("tnu");
+                            self.line(&format!("int64_t {tmp} = mako_tick_now_us();"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "tick_sleep_us" => {
+                            let (_, s) = self.emit_expr(&args[0]);
+                            let (_, i) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("tsu");
+                            self.line(&format!("int64_t {tmp} = mako_tick_sleep_us({s}, {i});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        // Cloud / distributed
+                        "chash_new" => {
+                            let (_, n) = self.emit_expr(&args[0]);
+                            let (_, v) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("ch");
+                            self.line(&format!("MakoCHash *{tmp} = mako_chash_new({n}, {v});"));
+                            return ("MakoCHash*".into(), tmp);
+                        }
+                        "chash_get" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            let (_, k) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("cg");
+                            self.line(&format!("int64_t {tmp} = mako_chash_get({r}, {k});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "chash_add_node" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("ca");
+                            self.line(&format!("int64_t {tmp} = mako_chash_add_node({r});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "chash_remove_node" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            let (_, n) = self.emit_expr(&args[1]);
+                            self.line(&format!("mako_chash_remove_node({r}, {n});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "chash_node_count" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("cn");
+                            self.line(&format!("int64_t {tmp} = mako_chash_node_count({r});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "chash_free" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_chash_free({r});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "ratelimit_new" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            let (_, b) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("rl");
+                            self.line(&format!("MakoRateLimiter *{tmp} = mako_ratelimit_new({r}, {b});"));
+                            return ("MakoRateLimiter*".into(), tmp);
+                        }
+                        "ratelimit_allow" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("ra");
+                            self.line(&format!("int64_t {tmp} = mako_ratelimit_allow({r});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "ratelimit_remaining" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("rr");
+                            self.line(&format!("int64_t {tmp} = mako_ratelimit_remaining({r});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "ratelimit_free" => {
+                            let (_, r) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_ratelimit_free({r});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "breaker_new" => {
+                            let (_, t) = self.emit_expr(&args[0]);
+                            let (_, to) = self.emit_expr(&args[1]);
+                            let (_, h) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("cb");
+                            self.line(&format!("MakoCircuitBreaker *{tmp} = mako_breaker_new({t}, {to}, {h});"));
+                            return ("MakoCircuitBreaker*".into(), tmp);
+                        }
+                        "breaker_allow" => {
+                            let (_, c) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("ba");
+                            self.line(&format!("int64_t {tmp} = mako_breaker_allow({c});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "breaker_success" => {
+                            let (_, c) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_breaker_success({c});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "breaker_failure" => {
+                            let (_, c) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_breaker_failure({c});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "breaker_state" => {
+                            let (_, c) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("bs");
+                            self.line(&format!("int64_t {tmp} = mako_breaker_state({c});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "breaker_reset" => {
+                            let (_, c) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_breaker_reset({c});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "breaker_free" => {
+                            let (_, c) = self.emit_expr(&args[0]);
+                            self.line(&format!("mako_breaker_free({c});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "jwt_sign" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let (_, s) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("js");
+                            self.line(&format!("MakoString {tmp} = mako_jwt_sign({p}, {s});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "jwt_verify" => {
+                            let (_, t) = self.emit_expr(&args[0]);
+                            let (_, s) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("jv");
+                            self.line(&format!("int64_t {tmp} = mako_jwt_verify({t}, {s});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "jwt_payload" => {
+                            let (_, t) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("jp");
+                            self.line(&format!("MakoString {tmp} = mako_jwt_payload({t});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "backoff_ms" => {
+                            let (_, a) = self.emit_expr(&args[0]);
+                            let (_, b) = self.emit_expr(&args[1]);
+                            let (_, m) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("bo");
+                            self.line(&format!("int64_t {tmp} = mako_backoff_ms({a}, {b}, {m});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        "env_get_or" => {
+                            let (_, n) = self.emit_expr(&args[0]);
+                            let (_, d) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("eg");
+                            self.line(&format!("MakoString {tmp} = mako_env_get_or({n}, {d});"));
+                            return ("MakoString".into(), tmp);
+                        }
+                        "env_has" => {
+                            let (_, n) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("eh");
+                            self.line(&format!("int64_t {tmp} = mako_env_has({n});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        // HTTP Engine
+                        "httpengine_new" => {
+                            let (_, p) = self.emit_expr(&args[0]);
+                            let (_, w) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("he");
+                            self.line(&format!("MakoHttpEngine *{tmp} = mako_httpengine_new({p}, {w});"));
+                            return ("MakoHttpEngine*".into(), tmp);
+                        }
+                        "httpengine_route" => {
+                            let (_, e) = self.emit_expr(&args[0]);
+                            let (_, path) = self.emit_expr(&args[1]);
+                            let (_, status) = self.emit_expr(&args[2]);
+                            let (_, ctype) = self.emit_expr(&args[3]);
+                            let (_, body) = self.emit_expr(&args[4]);
+                            self.line(&format!("mako_httpengine_route({e}, {path}, {status}, {ctype}, {body});"));
+                            return ("void".into(), "/*void*/".into());
+                        }
+                        "httpengine_serve" => {
+                            let (_, e) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("hs");
+                            self.line(&format!("int64_t {tmp} = mako_httpengine_serve({e});"));
+                            return ("int64_t".into(), tmp);
+                        }
+                        // Math
+                        "sqrt" => {
+                            let (_, x) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("sq");
+                            self.line(&format!("double {tmp} = mako_sqrt({x});"));
+                            return ("double".into(), tmp);
+                        }
+                        "sin" => {
+                            let (_, x) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("sn");
+                            self.line(&format!("double {tmp} = mako_sin({x});"));
+                            return ("double".into(), tmp);
+                        }
+                        "cos" => {
+                            let (_, x) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("cs");
+                            self.line(&format!("double {tmp} = mako_cos({x});"));
+                            return ("double".into(), tmp);
+                        }
+                        "atan2" => {
+                            let (_, y) = self.emit_expr(&args[0]);
+                            let (_, x) = self.emit_expr(&args[1]);
+                            let tmp = self.fresh("at");
+                            self.line(&format!("double {tmp} = mako_atan2({y}, {x});"));
+                            return ("double".into(), tmp);
+                        }
+                        "floor_f" => {
+                            let (_, x) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("fl");
+                            self.line(&format!("double {tmp} = mako_floor({x});"));
+                            return ("double".into(), tmp);
+                        }
+                        "ceil_f" => {
+                            let (_, x) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("ce");
+                            self.line(&format!("double {tmp} = mako_ceil({x});"));
+                            return ("double".into(), tmp);
+                        }
+                        "abs_f" => {
+                            let (_, x) = self.emit_expr(&args[0]);
+                            let tmp = self.fresh("ab");
+                            self.line(&format!("double {tmp} = mako_abs_f({x});"));
+                            return ("double".into(), tmp);
+                        }
+                        "dist2d" => {
+                            let (_, x1) = self.emit_expr(&args[0]);
+                            let (_, y1) = self.emit_expr(&args[1]);
+                            let (_, x2) = self.emit_expr(&args[2]);
+                            let (_, y2) = self.emit_expr(&args[3]);
+                            let tmp = self.fresh("d2");
+                            self.line(&format!("double {tmp} = mako_dist2d({x1}, {y1}, {x2}, {y2});"));
+                            return ("double".into(), tmp);
+                        }
+                        "lerp" => {
+                            let (_, a) = self.emit_expr(&args[0]);
+                            let (_, b) = self.emit_expr(&args[1]);
+                            let (_, t) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("lp");
+                            self.line(&format!("double {tmp} = mako_lerp({a}, {b}, {t});"));
+                            return ("double".into(), tmp);
+                        }
+                        "clamp_f" => {
+                            let (_, v) = self.emit_expr(&args[0]);
+                            let (_, lo) = self.emit_expr(&args[1]);
+                            let (_, hi) = self.emit_expr(&args[2]);
+                            let tmp = self.fresh("cl");
+                            self.line(&format!("double {tmp} = mako_clamp_f({v}, {lo}, {hi});"));
+                            return ("double".into(), tmp);
                         }
                         "random_bytes" => {
                             let (_, n) = self.emit_expr(&args[0]);

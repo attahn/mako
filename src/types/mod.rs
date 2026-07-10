@@ -61,6 +61,22 @@ pub enum Type {
     RWMutex,
     /// Concurrent hashmap (`cmap_new`)
     CMap,
+    /// Memory-mapped file (`mmap_open`)
+    MMap,
+    /// Event loop (`evloop_new`)
+    EvLoop,
+    /// Binary buffer (`buf_pack_new`)
+    Buf,
+    /// Game UDP socket (`game_udp_bind`)
+    GameUDP,
+    /// Consistent hash ring (`chash_new`)
+    CHash,
+    /// Rate limiter (`ratelimit_new`)
+    RateLimiter,
+    /// Circuit breaker (`breaker_new`)
+    CircuitBreaker,
+    /// HTTP engine (`httpengine_new`)
+    HttpEngine,
     /// Buffered reader (`buf_reader_new`)
     BufReader,
     /// Buffered writer (`buf_writer_new`)
@@ -108,6 +124,14 @@ impl Type {
             Type::Mutex => "Mutex".into(),
             Type::RWMutex => "RWMutex".into(),
             Type::CMap => "CMap".into(),
+            Type::MMap => "MMap".into(),
+            Type::EvLoop => "EvLoop".into(),
+            Type::Buf => "Buf".into(),
+            Type::GameUDP => "GameUDP".into(),
+            Type::CHash => "CHash".into(),
+            Type::RateLimiter => "RateLimiter".into(),
+            Type::CircuitBreaker => "CircuitBreaker".into(),
+            Type::HttpEngine => "HttpEngine".into(),
             Type::BufReader => "BufReader".into(),
             Type::BufWriter => "BufWriter".into(),
             Type::HttpRequest => "HttpRequest".into(),
@@ -767,6 +791,229 @@ impl TypeChecker {
             "cmap_incr".into(),
             Type::Fn(vec![Type::CMap, Type::String, Type::Int], Box::new(Type::Int)),
         );
+        // Direct I/O (mako_dio.h)
+        fns.insert(
+            "file_open".into(),
+            Type::Fn(vec![Type::String, Type::Int, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "file_close".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "pread".into(),
+            Type::Fn(vec![Type::Int, Type::Int, Type::Int], Box::new(Type::String)),
+        );
+        fns.insert(
+            "pwrite".into(),
+            Type::Fn(vec![Type::Int, Type::String, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "file_append".into(),
+            Type::Fn(vec![Type::Int, Type::String], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "fsync".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "fdatasync".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "fallocate".into(),
+            Type::Fn(vec![Type::Int, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "file_size".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "file_truncate".into(),
+            Type::Fn(vec![Type::Int, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "file_seek".into(),
+            Type::Fn(vec![Type::Int, Type::Int, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "file_read_exact".into(),
+            Type::Fn(vec![Type::Int, Type::Int], Box::new(Type::String)),
+        );
+        // mmap
+        fns.insert(
+            "mmap_open".into(),
+            Type::Fn(vec![Type::String, Type::Int], Box::new(Type::MMap)),
+        );
+        fns.insert(
+            "mmap_create".into(),
+            Type::Fn(vec![Type::String, Type::Int], Box::new(Type::MMap)),
+        );
+        fns.insert(
+            "mmap_read".into(),
+            Type::Fn(vec![Type::MMap, Type::Int, Type::Int], Box::new(Type::String)),
+        );
+        fns.insert(
+            "mmap_write".into(),
+            Type::Fn(vec![Type::MMap, Type::Int, Type::String], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "mmap_sync".into(),
+            Type::Fn(vec![Type::MMap, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "mmap_size".into(),
+            Type::Fn(vec![Type::MMap], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "mmap_close".into(),
+            Type::Fn(vec![Type::MMap], Box::new(Type::Int)),
+        );
+        // Event loop
+        fns.insert(
+            "evloop_new".into(),
+            Type::Fn(vec![], Box::new(Type::EvLoop)),
+        );
+        fns.insert(
+            "evloop_add".into(),
+            Type::Fn(vec![Type::EvLoop, Type::Int, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "evloop_mod".into(),
+            Type::Fn(vec![Type::EvLoop, Type::Int, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "evloop_del".into(),
+            Type::Fn(vec![Type::EvLoop, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "evloop_wait".into(),
+            Type::Fn(vec![Type::EvLoop, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "evloop_event_fd".into(),
+            Type::Fn(vec![Type::EvLoop, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "evloop_event_flags".into(),
+            Type::Fn(vec![Type::EvLoop, Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "evloop_close".into(),
+            Type::Fn(vec![Type::EvLoop], Box::new(Type::Int)),
+        );
+        // Non-blocking I/O helpers
+        fns.insert(
+            "nb_listen".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "nb_accept".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "nb_read".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::String)),
+        );
+        fns.insert(
+            "nb_write".into(),
+            Type::Fn(vec![Type::Int, Type::String], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "nb_udp_bind".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        fns.insert(
+            "nb_udp_recv".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::String)),
+        );
+        fns.insert(
+            "nb_close".into(),
+            Type::Fn(vec![Type::Int], Box::new(Type::Int)),
+        );
+        // Binary buffer
+        fns.insert("buf_pack_new".into(), Type::Fn(vec![Type::Int], Box::new(Type::Buf)));
+        fns.insert("buf_from_string".into(), Type::Fn(vec![Type::String], Box::new(Type::Buf)));
+        fns.insert("buf_to_string".into(), Type::Fn(vec![Type::Buf], Box::new(Type::String)));
+        fns.insert("buf_len".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_pos".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_reset".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Void)));
+        fns.insert("buf_seek".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_free".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Void)));
+        fns.insert("buf_write_u8".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_write_u16".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_write_u32".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_write_u64".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_write_i32".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_write_f32".into(), Type::Fn(vec![Type::Buf, Type::Float], Box::new(Type::Void)));
+        fns.insert("buf_write_f64".into(), Type::Fn(vec![Type::Buf, Type::Float], Box::new(Type::Void)));
+        fns.insert("buf_write_bytes".into(), Type::Fn(vec![Type::Buf, Type::String], Box::new(Type::Void)));
+        fns.insert("buf_write_str".into(), Type::Fn(vec![Type::Buf, Type::String], Box::new(Type::Void)));
+        fns.insert("buf_write_u16be".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_write_u32be".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::Void)));
+        fns.insert("buf_read_u8".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_read_u16".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_read_u32".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_read_u64".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_read_i32".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_read_f32".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Float)));
+        fns.insert("buf_read_f64".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Float)));
+        fns.insert("buf_read_bytes".into(), Type::Fn(vec![Type::Buf, Type::Int], Box::new(Type::String)));
+        fns.insert("buf_read_str".into(), Type::Fn(vec![Type::Buf], Box::new(Type::String)));
+        fns.insert("buf_read_u16be".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        fns.insert("buf_read_u32be".into(), Type::Fn(vec![Type::Buf], Box::new(Type::Int)));
+        // Game UDP
+        fns.insert("game_udp_bind".into(), Type::Fn(vec![Type::Int], Box::new(Type::GameUDP)));
+        fns.insert("game_udp_recv".into(), Type::Fn(vec![Type::GameUDP], Box::new(Type::String)));
+        fns.insert("game_udp_sender".into(), Type::Fn(vec![Type::GameUDP], Box::new(Type::Int)));
+        fns.insert("game_udp_send".into(), Type::Fn(vec![Type::GameUDP, Type::Int, Type::String], Box::new(Type::Int)));
+        fns.insert("game_udp_broadcast".into(), Type::Fn(vec![Type::GameUDP, Type::String], Box::new(Type::Int)));
+        fns.insert("game_udp_kick".into(), Type::Fn(vec![Type::GameUDP, Type::Int], Box::new(Type::Void)));
+        fns.insert("game_udp_peers".into(), Type::Fn(vec![Type::GameUDP], Box::new(Type::Int)));
+        fns.insert("game_udp_fd".into(), Type::Fn(vec![Type::GameUDP], Box::new(Type::Int)));
+        fns.insert("game_udp_close".into(), Type::Fn(vec![Type::GameUDP], Box::new(Type::Void)));
+        // Tick timer
+        fns.insert("tick_now_us".into(), Type::Fn(vec![], Box::new(Type::Int)));
+        fns.insert("tick_sleep_us".into(), Type::Fn(vec![Type::Int, Type::Int], Box::new(Type::Int)));
+        // Cloud / distributed
+        fns.insert("chash_new".into(), Type::Fn(vec![Type::Int, Type::Int], Box::new(Type::CHash)));
+        fns.insert("chash_get".into(), Type::Fn(vec![Type::CHash, Type::String], Box::new(Type::Int)));
+        fns.insert("chash_add_node".into(), Type::Fn(vec![Type::CHash], Box::new(Type::Int)));
+        fns.insert("chash_remove_node".into(), Type::Fn(vec![Type::CHash, Type::Int], Box::new(Type::Void)));
+        fns.insert("chash_node_count".into(), Type::Fn(vec![Type::CHash], Box::new(Type::Int)));
+        fns.insert("chash_free".into(), Type::Fn(vec![Type::CHash], Box::new(Type::Void)));
+        fns.insert("ratelimit_new".into(), Type::Fn(vec![Type::Int, Type::Int], Box::new(Type::RateLimiter)));
+        fns.insert("ratelimit_allow".into(), Type::Fn(vec![Type::RateLimiter], Box::new(Type::Int)));
+        fns.insert("ratelimit_remaining".into(), Type::Fn(vec![Type::RateLimiter], Box::new(Type::Int)));
+        fns.insert("ratelimit_free".into(), Type::Fn(vec![Type::RateLimiter], Box::new(Type::Void)));
+        fns.insert("breaker_new".into(), Type::Fn(vec![Type::Int, Type::Int, Type::Int], Box::new(Type::CircuitBreaker)));
+        fns.insert("breaker_allow".into(), Type::Fn(vec![Type::CircuitBreaker], Box::new(Type::Int)));
+        fns.insert("breaker_success".into(), Type::Fn(vec![Type::CircuitBreaker], Box::new(Type::Void)));
+        fns.insert("breaker_failure".into(), Type::Fn(vec![Type::CircuitBreaker], Box::new(Type::Void)));
+        fns.insert("breaker_state".into(), Type::Fn(vec![Type::CircuitBreaker], Box::new(Type::Int)));
+        fns.insert("breaker_reset".into(), Type::Fn(vec![Type::CircuitBreaker], Box::new(Type::Void)));
+        fns.insert("breaker_free".into(), Type::Fn(vec![Type::CircuitBreaker], Box::new(Type::Void)));
+        fns.insert("jwt_sign".into(), Type::Fn(vec![Type::String, Type::String], Box::new(Type::String)));
+        fns.insert("jwt_verify".into(), Type::Fn(vec![Type::String, Type::String], Box::new(Type::Int)));
+        fns.insert("jwt_payload".into(), Type::Fn(vec![Type::String], Box::new(Type::String)));
+        fns.insert("backoff_ms".into(), Type::Fn(vec![Type::Int, Type::Int, Type::Int], Box::new(Type::Int)));
+        fns.insert("env_get_or".into(), Type::Fn(vec![Type::String, Type::String], Box::new(Type::String)));
+        fns.insert("env_has".into(), Type::Fn(vec![Type::String], Box::new(Type::Int)));
+        // HTTP Engine
+        fns.insert("httpengine_new".into(), Type::Fn(vec![Type::Int, Type::Int], Box::new(Type::HttpEngine)));
+        fns.insert("httpengine_route".into(), Type::Fn(vec![Type::HttpEngine, Type::String, Type::Int, Type::String, Type::String], Box::new(Type::Void)));
+        fns.insert("httpengine_serve".into(), Type::Fn(vec![Type::HttpEngine], Box::new(Type::Int)));
+        // Math
+        fns.insert("sqrt".into(), Type::Fn(vec![Type::Float], Box::new(Type::Float)));
+        fns.insert("sin".into(), Type::Fn(vec![Type::Float], Box::new(Type::Float)));
+        fns.insert("cos".into(), Type::Fn(vec![Type::Float], Box::new(Type::Float)));
+        fns.insert("atan2".into(), Type::Fn(vec![Type::Float, Type::Float], Box::new(Type::Float)));
+        fns.insert("floor_f".into(), Type::Fn(vec![Type::Float], Box::new(Type::Float)));
+        fns.insert("ceil_f".into(), Type::Fn(vec![Type::Float], Box::new(Type::Float)));
+        fns.insert("abs_f".into(), Type::Fn(vec![Type::Float], Box::new(Type::Float)));
+        fns.insert("dist2d".into(), Type::Fn(vec![Type::Float, Type::Float, Type::Float, Type::Float], Box::new(Type::Float)));
+        fns.insert("lerp".into(), Type::Fn(vec![Type::Float, Type::Float, Type::Float], Box::new(Type::Float)));
+        fns.insert("clamp_f".into(), Type::Fn(vec![Type::Float, Type::Float, Type::Float], Box::new(Type::Float)));
         fns.insert(
             "random_bytes".into(),
             Type::Fn(vec![Type::Int], Box::new(Type::String)),
@@ -5487,6 +5734,14 @@ impl TypeChecker {
                 "Mutex" => Ok(Type::Mutex),
                 "RWMutex" => Ok(Type::RWMutex),
                 "CMap" => Ok(Type::CMap),
+                "MMap" => Ok(Type::MMap),
+                "EvLoop" => Ok(Type::EvLoop),
+                "Buf" => Ok(Type::Buf),
+                "GameUDP" => Ok(Type::GameUDP),
+                "CHash" => Ok(Type::CHash),
+                "RateLimiter" => Ok(Type::RateLimiter),
+                "CircuitBreaker" => Ok(Type::CircuitBreaker),
+                "HttpEngine" => Ok(Type::HttpEngine),
                 "BufReader" => Ok(Type::BufReader),
                 "BufWriter" => Ok(Type::BufWriter),
                 "HttpRequest" => Ok(Type::HttpRequest),

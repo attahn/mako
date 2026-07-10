@@ -1259,6 +1259,123 @@ print_int(http_last_status())
 ```
 
 Smoke: `./scripts/http-lib-smoke.sh` · HTTPS/H2: `examples/https_server.mko`, `examples/h2_server.mko`.
+### Direct I/O (`mako_dio.h`)
+
+Low-level unbuffered file operations and memory-mapped files for storage engines,
+databases, and performance-critical I/O paths. Runtime: `runtime/mako_dio.h`.
+
+```mko
+// examples/dio_write.mko — positional read/write without buffering
+fn main() {
+    let fd = file_open("/tmp/mako_dio.dat", 1, 0)  // mode=write
+    let _ = fallocate(fd, 4096)                     // pre-allocate space
+    let _ = pwrite(fd, "hello dio", 0)              // write at offset 0
+    let _ = fdatasync(fd)                           // flush data to disk
+    let _ = file_close(fd)
+
+    let fd2 = file_open("/tmp/mako_dio.dat", 0, 0)  // mode=read
+    let data = pread(fd2, 9, 0)                      // read 9 bytes at offset 0
+    print(data)                                      // "hello dio"
+    print_int(file_size(fd2))
+    let _ = file_close(fd2)
+}
+```
+
+| Op | Signature | Notes |
+|----|-----------|-------|
+| `file_open(path, mode, flags)` | `-> int` | Open fd; mode 0=read, 1=write, 2=rw |
+| `file_close(fd)` | `-> int` | Close fd |
+| `pread(fd, count, offset)` | `-> string` | Positional read (no seek) |
+| `pwrite(fd, data, offset)` | `-> int` | Positional write (no seek) |
+| `file_append(fd, data)` | `-> int` | Append to file |
+| `fsync(fd)` | `-> int` | Flush data + metadata |
+| `fdatasync(fd)` | `-> int` | Flush data only |
+| `fallocate(fd, size)` | `-> int` | Pre-allocate disk space |
+| `file_size(fd)` | `-> int` | File size in bytes |
+| `file_truncate(fd, size)` | `-> int` | Truncate file |
+| `file_seek(fd, offset, whence)` | `-> int` | Seek; whence 0=SET,1=CUR,2=END |
+| `file_read_exact(fd, n)` | `-> string` | Read exactly n bytes or fail |
+
+#### Memory-mapped files (MMap)
+
+```mko
+// examples/mmap_kv.mko — memory-mapped file for fast random access
+fn main() {
+    let m = mmap_create("/tmp/mako.mmap", 4096)
+    let _ = mmap_write(m, 0, "key1=value1\n")
+    let _ = mmap_sync(m, 0)
+    let data = mmap_read(m, 0, 12)
+    print(data)                       // "key1=value1\n"
+    print_int(mmap_size(m))           // 4096
+    let _ = mmap_close(m)
+
+    // Re-open existing mapping
+    let m2 = mmap_open("/tmp/mako.mmap", 0)
+    let data2 = mmap_read(m2, 0, 12)
+    print(data2)
+    let _ = mmap_close(m2)
+}
+```
+
+| Op | Signature | Notes |
+|----|-----------|-------|
+| `mmap_open(path, mode)` | `-> MMap` | Map existing file |
+| `mmap_create(path, size)` | `-> MMap` | Create + map new file |
+| `mmap_read(m, offset, count)` | `-> string` | Read from mapping |
+| `mmap_write(m, offset, data)` | `-> int` | Write to mapping |
+| `mmap_sync(m, flags)` | `-> int` | Flush mapping to disk |
+| `mmap_size(m)` | `-> int` | Size of mapping |
+| `mmap_close(m)` | `-> int` | Unmap and close |
+
+---
+
+### Binary Buffer (`Buf` type)
+
+The `Buf` type provides structured reading and writing of binary data — useful for
+network protocols, file formats, and serialization. Runtime: `runtime/mako_buf.h`.
+
+```mko
+// examples/buf_protocol.mko — build and parse a binary message
+fn main() {
+    // Pack a message: u8 type + u32 length + payload
+    let b = buf_pack_new(64)
+    buf_write_u8(b, 1)                 // message type
+    buf_write_u32(b, 5)                // payload length
+    buf_write_str(b, "hello")          // payload
+    let wire = buf_to_string(b)
+    buf_free(b)
+
+    // Parse it back
+    let r = buf_from_string(wire)
+    let msg_type = buf_read_u8(r)
+    let msg_len = buf_read_u32(r)
+    let payload = buf_read_str(r, msg_len)
+    print_int(msg_type)                // 1
+    print_int(msg_len)                 // 5
+    print(payload)                     // "hello"
+    buf_free(r)
+}
+```
+
+| Op | Notes |
+|----|-------|
+| `buf_pack_new(capacity)` | New write buffer |
+| `buf_from_string(s)` | Buffer from existing bytes |
+| `buf_to_string(b)` | Extract contents as string |
+| `buf_len(b)` / `buf_pos(b)` | Total length / current position |
+| `buf_reset(b)` / `buf_seek(b, pos)` | Reset to start / seek to position |
+| `buf_free(b)` | Free buffer memory |
+| `buf_write_u8/u16/u32/u64` | Write unsigned integers (little-endian) |
+| `buf_write_i32/f32/f64` | Write signed int / floats |
+| `buf_write_u16be/u32be` | Write big-endian unsigned |
+| `buf_read_u8/u16/u32/u64` | Read unsigned integers (little-endian) |
+| `buf_read_i32/f32/f64` | Read signed int / floats |
+| `buf_read_u16be/u32be` | Read big-endian unsigned |
+| `buf_write_bytes(b, data)` / `buf_write_str(b, s)` | Write raw bytes/string |
+| `buf_read_bytes(b, n)` / `buf_read_str(b, n)` | Read n raw bytes/string |
+
+---
+
 ### Systems programming
 
 Ownership (`hold`/`share`), arenas, bytes, and files — no mandatory GC:
@@ -1303,6 +1420,195 @@ unit-test seeds — prefer the live OpenSSL builtins above for integration.
 // examples/ws_echo.mko, ws_ping.mko
 // RFC6455 upgrade + text; ping/pong + binary
 ```
+
+---
+
+## 11b. Event Loop (Non-blocking I/O)
+
+Mako provides a high-performance event loop for non-blocking I/O multiplexing
+(uses epoll on Linux, kqueue on macOS under the hood). Runtime: `runtime/mako_evloop.h`.
+
+### Event Loop Core
+
+```mko
+// Create and use an event loop
+let el = evloop_new()
+let server_fd = nb_listen(8080)
+let _ = evloop_add(el, server_fd, 1)  // 1 = readable
+
+while true {
+    let n = evloop_wait(el, 1000)  // wait up to 1000ms
+    let mut i = 0
+    while i < n {
+        let fd = evloop_event_fd(el, i)
+        let flags = evloop_event_flags(el, i)
+        if fd == server_fd {
+            let client = nb_accept(server_fd)
+            let _ = evloop_add(el, client, 1)
+        } else {
+            let data = nb_read(fd)
+            let _ = nb_write(fd, "HTTP/1.1 200 OK\r\n\r\nhi\n")
+            let _ = evloop_del(el, fd)
+            let _ = nb_close(fd)
+        }
+        i = i + 1
+    }
+}
+let _ = evloop_close(el)
+```
+
+| Function | Purpose |
+|----------|---------|
+| `evloop_new()` | Create event loop |
+| `evloop_add(el, fd, flags)` | Register fd for monitoring |
+| `evloop_mod(el, fd, flags)` | Modify interest flags |
+| `evloop_del(el, fd)` | Remove fd from monitoring |
+| `evloop_wait(el, timeout_ms)` | Wait for events, returns count |
+| `evloop_event_fd(el, index)` | Get fd from ready event |
+| `evloop_event_flags(el, index)` | Get flags from ready event |
+| `evloop_close(el)` | Destroy event loop |
+
+### Non-blocking Socket Helpers
+
+| Function | Purpose |
+|----------|---------|
+| `nb_listen(port)` | Non-blocking TCP listener |
+| `nb_accept(fd)` | Non-blocking accept |
+| `nb_read(fd)` | Non-blocking read |
+| `nb_write(fd, data)` | Non-blocking write |
+| `nb_udp_bind(port)` | Non-blocking UDP socket |
+| `nb_udp_recv(fd)` | Non-blocking UDP receive |
+| `nb_close(fd)` | Close non-blocking socket |
+
+---
+
+## 11c. Game UDP
+
+High-performance UDP networking for game servers. Runtime: `runtime/mako_game.h`.
+
+```mko
+let u = game_udp_bind(27015)
+let el = evloop_new()
+let _ = evloop_add(el, game_udp_fd(u), 1)
+
+while true {
+    let n = evloop_wait(el, 16)  // ~60 Hz
+    if n > 0 {
+        let data = game_udp_recv(u)
+        let peer = game_udp_sender(u)
+        let _ = game_udp_broadcast(u, "state:" + data)
+    }
+}
+game_udp_close(u)
+```
+
+| Function | Purpose |
+|----------|---------|
+| `game_udp_bind(port)` | Bind UDP game socket |
+| `game_udp_recv(u)` | Receive packet (tracks sender) |
+| `game_udp_sender(u)` | Get peer ID of last sender |
+| `game_udp_send(u, peer, data)` | Send to specific peer |
+| `game_udp_broadcast(u, data)` | Send to all connected peers |
+| `game_udp_kick(u, peer)` | Disconnect a peer |
+| `game_udp_peers(u)` | Number of connected peers |
+| `game_udp_fd(u)` | Raw fd for event loop integration |
+| `game_udp_close(u)` | Close socket |
+| `tick_now_us()` | Microsecond timestamp for game ticks |
+| `tick_sleep_us(start_us, interval_us)` | Sleep to maintain tick rate |
+
+---
+
+## 11d. Cloud / Distributed Primitives
+
+Primitives for building distributed services. Runtime: `runtime/mako_cloud.h`.
+
+### Consistent Hashing
+
+```mko
+let ring = chash_new(3, 150)  // 3 nodes, 150 virtual nodes each
+let node = chash_get(ring, "user:42")
+print_int(node)  // 0, 1, or 2
+
+let new_id = chash_add_node(ring)
+chash_remove_node(ring, 0)
+print_int(chash_node_count(ring))  // 3
+chash_free(ring)
+```
+
+| Function | Purpose |
+|----------|---------|
+| `chash_new(nodes, vnodes)` | Create hash ring |
+| `chash_get(ring, key)` | Get node for key |
+| `chash_add_node(ring)` | Add node, returns ID |
+| `chash_remove_node(ring, node)` | Remove node |
+| `chash_node_count(ring)` | Active node count |
+| `chash_free(ring)` | Destroy ring |
+
+### Rate Limiter
+
+```mko
+let rl = ratelimit_new(100, 10)  // 100 tokens/sec, burst of 10
+if ratelimit_allow(rl) == 1 {
+    // request allowed
+}
+print_int(ratelimit_remaining(rl))
+ratelimit_free(rl)
+```
+
+| Function | Purpose |
+|----------|---------|
+| `ratelimit_new(rate, burst)` | Token bucket limiter |
+| `ratelimit_allow(r)` | Consume token (1=allowed, 0=rejected) |
+| `ratelimit_remaining(r)` | Tokens remaining |
+| `ratelimit_free(r)` | Destroy |
+
+### Circuit Breaker
+
+```mko
+let cb = breaker_new(5, 30000, 3)  // 5 failures, 30s timeout, 3 half-open max
+if breaker_allow(cb) == 1 {
+    // attempt request
+    breaker_success(cb)
+} else {
+    // circuit is open, fail fast
+}
+print_int(breaker_state(cb))  // 0=closed, 1=open, 2=half-open
+breaker_free(cb)
+```
+
+| Function | Purpose |
+|----------|---------|
+| `breaker_new(threshold, timeout_ms, half_open_max)` | Create circuit breaker |
+| `breaker_allow(cb)` | Check if request should proceed |
+| `breaker_success(cb)` | Record success |
+| `breaker_failure(cb)` | Record failure |
+| `breaker_state(cb)` | 0=closed, 1=open, 2=half-open |
+| `breaker_reset(cb)` | Reset to closed |
+| `breaker_free(cb)` | Destroy |
+
+---
+
+## 11e. HTTP Engine
+
+High-level HTTP server with declarative routing. Runtime: `runtime/mako_httpengine.h`.
+
+```mko
+let e = httpengine_new()
+let _ = httpengine_route(e, "GET", "/health", 1)
+let _ = httpengine_route(e, "POST", "/api/users", 2)
+let _ = httpengine_start(e, 8080)
+// Engine runs until stopped
+httpengine_stop(e)
+httpengine_free(e)
+```
+
+| Function | Purpose |
+|----------|---------|
+| `httpengine_new()` | Create HTTP engine |
+| `httpengine_route(e, method, path, handler_id)` | Register route |
+| `httpengine_start(e, port)` | Start listening |
+| `httpengine_stop(e)` | Stop engine |
+| `httpengine_free(e)` | Destroy engine |
 
 ---
 

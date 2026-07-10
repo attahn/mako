@@ -758,6 +758,58 @@ join handles.
 
 ---
 
+## Event Loop Integration
+
+For high-concurrency servers that need to handle thousands of connections, Mako
+provides an event loop that multiplexes non-blocking I/O across many file
+descriptors without spawning a thread per connection:
+
+```mko
+fn main() {
+    let el = evloop_new()
+    let server_fd = nb_listen(8080)
+    let _ = evloop_add(el, server_fd, 1)
+
+    let mut running = true
+    while running {
+        let n = evloop_wait(el, 100)
+        let mut i = 0
+        while i < n {
+            let fd = evloop_event_fd(el, i)
+            if fd == server_fd {
+                let client = nb_accept(server_fd)
+                let _ = evloop_add(el, client, 1)
+            } else {
+                let data = nb_read(fd)
+                let _ = nb_write(fd, "hello\n")
+                let _ = evloop_del(el, fd)
+                let _ = nb_close(fd)
+            }
+            i = i + 1
+        }
+    }
+    let _ = evloop_close(el)
+}
+```
+
+The event loop uses epoll on Linux and kqueue on macOS. It integrates naturally
+with crew blocks -- you can run the event loop in one kicked task while other
+tasks handle computation. The `evloop_wait` call returns the number of ready
+events; iterate them with `evloop_event_fd` and `evloop_event_flags`.
+
+| Function | Purpose |
+|----------|---------|
+| `evloop_new()` | Create event loop instance |
+| `evloop_add(el, fd, flags)` | Register fd for monitoring |
+| `evloop_mod(el, fd, flags)` | Update interest flags |
+| `evloop_del(el, fd)` | Stop monitoring fd |
+| `evloop_wait(el, timeout_ms)` | Block until events ready, returns count |
+| `evloop_event_fd(el, i)` | Get fd at index i |
+| `evloop_event_flags(el, i)` | Get event flags at index i |
+| `evloop_close(el)` | Destroy event loop |
+
+---
+
 ## Colorless I/O
 
 Mako uses **colorless** concurrency: there is no `async`/`await` distinction.

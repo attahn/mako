@@ -723,6 +723,159 @@ fn main() {
 
 ---
 
+## Memory-Mapped Files (MMap)
+
+For workloads that need fast random access to large datasets -- indexes, caches,
+shared memory between processes -- Mako provides memory-mapped file I/O through
+the `MMap` type.
+
+### Creating and Writing
+
+```mko
+fn main() {
+    // Create a new 64KB mapped file
+    let m = mmap_create("/tmp/mako_store.dat", 65536)
+
+    // Write records at fixed offsets (like a page-based store)
+    let _ = mmap_write(m, 0, "record-0001")
+    let _ = mmap_write(m, 4096, "record-0002")
+    let _ = mmap_write(m, 8192, "record-0003")
+
+    // Flush to disk
+    let _ = mmap_sync(m, 0)
+    let _ = mmap_close(m)
+}
+```
+
+### Reading from an Existing Mapping
+
+```mko
+fn main() {
+    let m = mmap_open("/tmp/mako_store.dat", 0)  // read-only
+    let size = mmap_size(m)
+    print_int(size)                               // 65536
+
+    let rec = mmap_read(m, 4096, 11)
+    print(rec)                                    // "record-0002"
+
+    let _ = mmap_close(m)
+}
+```
+
+### MMap API Reference
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `mmap_create` | `(path: string, size: int) -> MMap` | Create file + map it |
+| `mmap_open` | `(path: string, mode: int) -> MMap` | Map existing file |
+| `mmap_read` | `(m: MMap, offset: int, count: int) -> string` | Read from mapping |
+| `mmap_write` | `(m: MMap, offset: int, data: string) -> int` | Write to mapping |
+| `mmap_sync` | `(m: MMap, flags: int) -> int` | Flush changes to disk |
+| `mmap_size` | `(m: MMap) -> int` | Size of mapping in bytes |
+| `mmap_close` | `(m: MMap) -> int` | Unmap and close |
+
+Use `mmap_sync` after writes to ensure durability. Without it, data lives only
+in the page cache and can be lost on a crash.
+
+---
+
+## Binary Protocols with `Buf`
+
+The `Buf` type provides structured binary reading and writing for implementing
+wire protocols, file format parsers, and serialization codecs. It handles byte
+ordering and typed values so you do not need manual bit shifting.
+
+### Writing a Binary Message
+
+```mko
+fn main() {
+    let b = buf_pack_new(256)
+
+    // Header: magic (2 bytes BE) + version (1 byte) + payload length (4 bytes)
+    buf_write_u16be(b, 0xCAFE)     // magic number
+    buf_write_u8(b, 1)             // protocol version
+    buf_write_u32(b, 13)           // payload length
+
+    // Payload
+    buf_write_str(b, "hello, world!")
+
+    let wire = buf_to_string(b)
+    print_int(buf_len(b))          // 20 (2+1+4+13)
+    buf_free(b)
+}
+```
+
+### Parsing a Binary Message
+
+```mko
+fn parse_message(wire: string) {
+    let r = buf_from_string(wire)
+
+    let magic = buf_read_u16be(r)
+    let version = buf_read_u8(r)
+    let length = buf_read_u32(r)
+    let payload = buf_read_str(r, length)
+
+    print_int(magic)       // 0xCAFE = 51966
+    print_int(version)     // 1
+    print_int(length)      // 13
+    print(payload)         // "hello, world!"
+
+    buf_free(r)
+}
+```
+
+### Numeric Types and Endianness
+
+```mko
+fn main() {
+    let b = buf_pack_new(64)
+
+    // Little-endian (default, matches x86/ARM memory layout)
+    buf_write_u16(b, 1000)
+    buf_write_u32(b, 100000)
+    buf_write_u64(b, 9999999999)
+    buf_write_i32(b, -42)
+    buf_write_f64(b, 3.14159)
+
+    // Big-endian (network byte order)
+    buf_write_u16be(b, 80)       // port number
+    buf_write_u32be(b, 167772161) // IP 10.0.0.1
+
+    buf_reset(b)
+
+    // Read back in same order
+    print_int(buf_read_u16(b))   // 1000
+    print_int(buf_read_u32(b))   // 100000
+    // ... and so on
+
+    buf_free(b)
+}
+```
+
+### Buf API Reference
+
+| Function | Purpose |
+|----------|---------|
+| `buf_pack_new(capacity)` | New buffer for writing |
+| `buf_from_string(s)` | Buffer from existing bytes (for reading) |
+| `buf_to_string(b)` | Extract contents as string |
+| `buf_len(b)` / `buf_pos(b)` | Total bytes written / current read position |
+| `buf_reset(b)` / `buf_seek(b, pos)` | Reset position / seek to offset |
+| `buf_free(b)` | Release buffer memory |
+| `buf_write_u8/u16/u32/u64(b, v)` | Write unsigned integers (LE) |
+| `buf_write_u16be/u32be(b, v)` | Write big-endian unsigned |
+| `buf_write_i32(b, v)` | Write signed 32-bit int |
+| `buf_write_f32/f64(b, v)` | Write IEEE 754 floats |
+| `buf_read_u8/u16/u32/u64(b)` | Read unsigned integers (LE) |
+| `buf_read_u16be/u32be(b)` | Read big-endian unsigned |
+| `buf_read_i32(b)` | Read signed 32-bit int |
+| `buf_read_f32/f64(b)` | Read IEEE 754 floats |
+| `buf_write_bytes(b, data)` / `buf_write_str(b, s)` | Write raw bytes |
+| `buf_read_bytes(b, n)` / `buf_read_str(b, n)` | Read n raw bytes |
+
+---
+
 ## Summary
 
 | Area | Key Functions |

@@ -5,12 +5,29 @@
 #define MAKO_DIO_H
 
 #include "mako_rt.h"
+
+/* macOS fcntl constants — use raw values to avoid _DARWIN_C_SOURCE ordering issues */
+#if defined(__APPLE__)
+#ifndef F_NOCACHE
+#define F_NOCACHE 48
+#endif
+#ifndef F_FULLFSYNC
+#define F_FULLFSYNC 51
+#endif
+#ifndef F_PREALLOCATE
+#define F_PREALLOCATE 42
+#endif
+#endif
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 #include <string.h>
 #include <stdlib.h>
+#if defined(__APPLE__)
+#include <sys/param.h>
+#endif
 
 /* ---- File descriptor operations ---- */
 
@@ -233,10 +250,17 @@ static inline int64_t mako_mmap_close(MakoMMap *m) {
 static inline int64_t mako_fallocate(int64_t fd, int64_t size) {
     if (fd < 0 || size <= 0) return -1;
 #if defined(__APPLE__)
-    fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, (off_t)size, 0};
+    /* fstore_t: { fst_flags, fst_posmode, fst_offset, fst_length, fst_bytesalloc } */
+    struct {
+        unsigned int fst_flags;
+        int fst_posmode;
+        off_t fst_offset;
+        off_t fst_length;
+        off_t fst_bytesalloc;
+    } store = {2 /* F_ALLOCATECONTIG */, 3 /* F_PEOFPOSMODE */, 0, (off_t)size, 0};
     int r = fcntl((int)fd, F_PREALLOCATE, &store);
     if (r < 0) {
-        store.fst_flags = F_ALLOCATEALL;
+        store.fst_flags = 4; /* F_ALLOCATEALL */
         r = fcntl((int)fd, F_PREALLOCATE, &store);
     }
     if (r >= 0) ftruncate((int)fd, (off_t)size);
@@ -280,12 +304,14 @@ static inline int64_t mako_file_seek(int64_t fd, int64_t offset, int64_t whence)
 /* Write multiple strings in one syscall (writev). Returns total bytes written. */
 static inline int64_t mako_file_writev(int64_t fd, MakoString *parts, int64_t count) {
     if (fd < 0 || !parts || count <= 0) return -1;
-    struct iovec *iov = (struct iovec *)alloca(sizeof(struct iovec) * (size_t)count);
+    struct iovec *iov = (struct iovec *)malloc(sizeof(struct iovec) * (size_t)count);
+    if (!iov) return -1;
     for (int64_t i = 0; i < count; i++) {
         iov[i].iov_base = (void *)parts[i].data;
         iov[i].iov_len = parts[i].len;
     }
     ssize_t n = writev((int)fd, iov, (int)count);
+    free(iov);
     return (int64_t)n;
 }
 

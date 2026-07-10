@@ -424,6 +424,138 @@ Supported patterns: literals, `.`, `*`, `+`, `?`, `|`, `[abc]`, `[a-z]`,
 | `black_box`       | `(T) -> T`           | Prevent optimizer elimination |
 | `now_ns`          | `() -> int`          | Monotonic clock for timing    |
 
+### Direct I/O
+
+| Function          | Signature                                     | Purpose                          |
+|-------------------|-----------------------------------------------|----------------------------------|
+| `file_open`       | `(path: string, mode: int, flags: int) -> int` | Open file descriptor            |
+| `file_close`      | `(fd: int) -> int`                            | Close file descriptor            |
+| `pread`           | `(fd: int, count: int, offset: int) -> string` | Positional read                 |
+| `pwrite`          | `(fd: int, data: string, offset: int) -> int` | Positional write                 |
+| `file_append`     | `(fd: int, data: string) -> int`              | Append to file                   |
+| `fsync`           | `(fd: int) -> int`                            | Flush data + metadata to disk    |
+| `fdatasync`       | `(fd: int) -> int`                            | Flush data only to disk          |
+| `fallocate`       | `(fd: int, size: int) -> int`                 | Pre-allocate disk space          |
+| `file_size`       | `(fd: int) -> int`                            | Get file size                    |
+| `file_truncate`   | `(fd: int, size: int) -> int`                 | Truncate file                    |
+| `file_seek`       | `(fd: int, offset: int, whence: int) -> int`  | Seek position (0=SET,1=CUR,2=END) |
+| `file_read_exact` | `(fd: int, n: int) -> string`                 | Read exactly n bytes             |
+
+### Memory-Mapped Files (MMap)
+
+| Function          | Signature                                      | Purpose                          |
+|-------------------|------------------------------------------------|----------------------------------|
+| `mmap_open`       | `(path: string, mode: int) -> MMap`            | Map existing file                |
+| `mmap_create`     | `(path: string, size: int) -> MMap`            | Create and map new file          |
+| `mmap_read`       | `(m: MMap, offset: int, count: int) -> string` | Read from mapping                |
+| `mmap_write`      | `(m: MMap, offset: int, data: string) -> int`  | Write to mapping                 |
+| `mmap_sync`       | `(m: MMap, flags: int) -> int`                 | Flush mapping to disk            |
+| `mmap_size`       | `(m: MMap) -> int`                             | Size of mapping                  |
+| `mmap_close`      | `(m: MMap) -> int`                             | Unmap and close                  |
+
+### Binary Buffer (Buf)
+
+| Function          | Signature                          | Purpose                          |
+|-------------------|------------------------------------|----------------------------------|
+| `buf_pack_new`    | `(capacity: int) -> Buf`           | Create new write buffer          |
+| `buf_from_string` | `(s: string) -> Buf`              | Buffer from existing bytes       |
+| `buf_to_string`   | `(b: Buf) -> string`              | Extract contents as string       |
+| `buf_len`         | `(b: Buf) -> int`                  | Total bytes in buffer            |
+| `buf_pos`         | `(b: Buf) -> int`                  | Current read position            |
+| `buf_reset`       | `(b: Buf)`                         | Reset position to start          |
+| `buf_seek`        | `(b: Buf, pos: int)`              | Seek to position                 |
+| `buf_free`        | `(b: Buf)`                         | Release buffer memory            |
+| `buf_write_u8`    | `(b: Buf, v: int)`                | Write unsigned 8-bit             |
+| `buf_write_u16`   | `(b: Buf, v: int)`                | Write unsigned 16-bit (LE)       |
+| `buf_write_u32`   | `(b: Buf, v: int)`                | Write unsigned 32-bit (LE)       |
+| `buf_write_u64`   | `(b: Buf, v: int)`                | Write unsigned 64-bit (LE)       |
+| `buf_write_u16be` | `(b: Buf, v: int)`                | Write unsigned 16-bit (BE)       |
+| `buf_write_u32be` | `(b: Buf, v: int)`                | Write unsigned 32-bit (BE)       |
+| `buf_write_i32`   | `(b: Buf, v: int)`                | Write signed 32-bit (LE)         |
+| `buf_write_f32`   | `(b: Buf, v: float)`              | Write 32-bit float               |
+| `buf_write_f64`   | `(b: Buf, v: float)`              | Write 64-bit float               |
+| `buf_read_u8`     | `(b: Buf) -> int`                  | Read unsigned 8-bit              |
+| `buf_read_u16`    | `(b: Buf) -> int`                  | Read unsigned 16-bit (LE)        |
+| `buf_read_u32`    | `(b: Buf) -> int`                  | Read unsigned 32-bit (LE)        |
+| `buf_read_u64`    | `(b: Buf) -> int`                  | Read unsigned 64-bit (LE)        |
+| `buf_read_u16be`  | `(b: Buf) -> int`                  | Read unsigned 16-bit (BE)        |
+| `buf_read_u32be`  | `(b: Buf) -> int`                  | Read unsigned 32-bit (BE)        |
+| `buf_read_i32`    | `(b: Buf) -> int`                  | Read signed 32-bit (LE)          |
+| `buf_read_f32`    | `(b: Buf) -> float`               | Read 32-bit float                |
+| `buf_read_f64`    | `(b: Buf) -> float`               | Read 64-bit float                |
+| `buf_write_bytes` | `(b: Buf, data: string)`          | Write raw bytes                  |
+| `buf_write_str`   | `(b: Buf, s: string)`             | Write string (same as write_bytes) |
+| `buf_read_bytes`  | `(b: Buf, n: int) -> string`      | Read n raw bytes                 |
+| `buf_read_str`    | `(b: Buf, n: int) -> string`      | Read n bytes as string           |
+
+### Event Loop (mako_evloop.h)
+
+| Function                | Signature                              | Purpose                       |
+|-------------------------|----------------------------------------|-------------------------------|
+| `evloop_new`            | `() -> EvLoop`                         | Create event loop             |
+| `evloop_add`            | `(EvLoop, int, int) -> int`            | Register fd with flags        |
+| `evloop_mod`            | `(EvLoop, int, int) -> int`            | Modify fd interest flags      |
+| `evloop_del`            | `(EvLoop, int) -> int`                 | Remove fd                     |
+| `evloop_wait`           | `(EvLoop, int) -> int`                 | Wait for events, returns count|
+| `evloop_event_fd`       | `(EvLoop, int) -> int`                 | Get fd from event at index    |
+| `evloop_event_flags`    | `(EvLoop, int) -> int`                 | Get flags from event at index |
+| `evloop_close`          | `(EvLoop) -> int`                      | Destroy event loop            |
+| `nb_listen`             | `(int) -> int`                         | Non-blocking TCP listener     |
+| `nb_accept`             | `(int) -> int`                         | Non-blocking accept           |
+| `nb_read`               | `(int) -> string`                      | Non-blocking read             |
+| `nb_write`              | `(int, string) -> int`                 | Non-blocking write            |
+| `nb_udp_bind`           | `(int) -> int`                         | Non-blocking UDP socket       |
+| `nb_udp_recv`           | `(int) -> string`                      | Non-blocking UDP receive      |
+| `nb_close`              | `(int) -> int`                         | Close non-blocking socket     |
+
+### Game UDP (mako_game.h)
+
+| Function                | Signature                              | Purpose                       |
+|-------------------------|----------------------------------------|-------------------------------|
+| `game_udp_bind`         | `(int) -> GameUDP`                     | Bind UDP game socket          |
+| `game_udp_recv`         | `(GameUDP) -> string`                  | Receive packet (tracks sender)|
+| `game_udp_sender`       | `(GameUDP) -> int`                     | Peer ID of last sender        |
+| `game_udp_send`         | `(GameUDP, int, string) -> int`        | Send to specific peer         |
+| `game_udp_broadcast`    | `(GameUDP, string) -> int`             | Send to all peers             |
+| `game_udp_kick`         | `(GameUDP, int)`                       | Disconnect a peer             |
+| `game_udp_peers`        | `(GameUDP) -> int`                     | Number of connected peers     |
+| `game_udp_fd`           | `(GameUDP) -> int`                     | Raw fd for event loop         |
+| `game_udp_close`        | `(GameUDP)`                            | Close socket                  |
+| `tick_now_us`           | `() -> int`                            | Microsecond timestamp         |
+| `tick_sleep_us`         | `(int, int) -> int`                    | Sleep to maintain tick rate   |
+
+### Cloud / Distributed (mako_cloud.h)
+
+| Function                | Signature                              | Purpose                       |
+|-------------------------|----------------------------------------|-------------------------------|
+| `chash_new`             | `(int, int) -> CHash`                  | Create hash ring (nodes, vnodes) |
+| `chash_get`             | `(CHash, string) -> int`               | Get node for key              |
+| `chash_add_node`        | `(CHash) -> int`                       | Add node, returns ID          |
+| `chash_remove_node`     | `(CHash, int)`                         | Remove a node                 |
+| `chash_node_count`      | `(CHash) -> int`                       | Active node count             |
+| `chash_free`            | `(CHash)`                              | Destroy ring                  |
+| `ratelimit_new`         | `(int, int) -> RateLimiter`            | Token bucket (rate, burst)    |
+| `ratelimit_allow`       | `(RateLimiter) -> int`                 | Consume token (1/0)           |
+| `ratelimit_remaining`   | `(RateLimiter) -> int`                 | Tokens remaining              |
+| `ratelimit_free`        | `(RateLimiter)`                        | Destroy limiter               |
+| `breaker_new`           | `(int, int, int) -> CircuitBreaker`    | Create (threshold, timeout, half_open_max) |
+| `breaker_allow`         | `(CircuitBreaker) -> int`              | Check if request proceeds     |
+| `breaker_success`       | `(CircuitBreaker)`                     | Record success                |
+| `breaker_failure`       | `(CircuitBreaker)`                     | Record failure                |
+| `breaker_state`         | `(CircuitBreaker) -> int`              | 0=closed, 1=open, 2=half-open|
+| `breaker_reset`         | `(CircuitBreaker)`                     | Reset to closed               |
+| `breaker_free`          | `(CircuitBreaker)`                     | Destroy breaker               |
+
+### HTTP Engine (mako_httpengine.h)
+
+| Function                | Signature                              | Purpose                       |
+|-------------------------|----------------------------------------|-------------------------------|
+| `httpengine_new`        | `() -> HttpEngine`                     | Create HTTP engine            |
+| `httpengine_route`      | `(HttpEngine, string, string, int) -> int` | Register route            |
+| `httpengine_start`      | `(HttpEngine, int) -> int`             | Start listening               |
+| `httpengine_stop`       | `(HttpEngine)`                         | Stop engine                   |
+| `httpengine_free`       | `(HttpEngine)`                         | Destroy engine                |
+
 ---
 
 ## E. Compiler Flags

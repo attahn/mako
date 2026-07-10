@@ -871,4 +871,365 @@ fn TestFileOperations() {
 mako test . -r TestFile -v
 ```
 
+---
+
+## MMap-Based Data Storage
+
+A simple key-value store using memory-mapped files for persistence. Records are
+stored at fixed-size slots, enabling O(1) access by index:
+
+```mko
+fn slot_offset(index: int) -> int {
+    // Each slot is 256 bytes (fixed-width record)
+    return index * 256
+}
+
+fn store_put(m: MMap, index: int, key: string, value: string) {
+    let record = key + "=" + value
+    let _ = mmap_write(m, slot_offset(index), record)
+}
+
+fn store_get(m: MMap, index: int, max_len: int) -> string {
+    return mmap_read(m, slot_offset(index), max_len)
+}
+
+fn main() {
+    let path = "/tmp/mako_kvstore.dat"
+    let slot_size = 256
+    let max_slots = 1024
+    let total_size = slot_size * max_slots   // 256 KB
+
+    // Create the store
+    let m = mmap_create(path, total_size)
+
+    // Write some records
+    store_put(m, 0, "user:1", "Alice")
+    store_put(m, 1, "user:2", "Bob")
+    store_put(m, 2, "user:3", "Carol")
+
+    // Flush to disk for durability
+    let _ = mmap_sync(m, 0)
+
+    // Read back
+    let rec = store_get(m, 1, 64)
+    print(rec)   // "user:2=Bob"
+
+    let _ = mmap_close(m)
+
+    // Re-open and verify persistence
+    let m2 = mmap_open(path, 0)
+    let rec2 = store_get(m2, 0, 64)
+    print(rec2)   // "user:1=Alice"
+    let _ = mmap_close(m2)
+
+    // Clean up
+    let _ = remove_file(path)
+}
+```
+
+This pattern forms the basis of embedded storage engines: fixed-size pages with
+known offsets enable lock-free concurrent reads (each reader maps the file
+independently). For production use, add a free-list or append-only log for
+crash recovery.
+
+---
+
+## Binary Protocol Parsing
+
+Parse and build a custom binary protocol (e.g., for a message queue or RPC
+frame). This recipe demonstrates the `Buf` type for structured binary I/O:
+
+```mko
+// Protocol: [magic:u16be][version:u8][type:u8][length:u32be][payload:bytes][checksum:u32]
+
+fn encode_message(msg_type: int, payload: string) -> string {
+    let b = buf_pack_new(256)
+
+    // Header
+    buf_write_u16be(b, 0x4D4B)     // "MK" magic
+    buf_write_u8(b, 1)             // version 1
+    buf_write_u8(b, msg_type)      // message type
+    buf_write_u32be(b, len(payload))  // payload length (network order)
+
+    // Payload
+    buf_write_str(b, payload)
+
+    // Simple checksum (sum of payload bytes mod 2^32)
+    let mut sum = 0
+    for i in range len(payload) {
+        sum = sum + int(payload[i])
+    }
+    buf_write_u32(b, sum)
+
+    let wire = buf_to_string(b)
+    buf_free(b)
+    return wire
+}
+
+fn decode_message(wire: string) -> string {
+    let r = buf_from_string(wire)
+
+    // Parse header
+    let magic = buf_read_u16be(r)
+    if magic != 0x4D4B {
+        buf_free(r)
+        print("error: invalid magic")
+        return ""
+    }
+
+    let version = buf_read_u8(r)
+    let msg_type = buf_read_u8(r)
+    let length = buf_read_u32be(r)
+
+    // Read payload
+    let payload = buf_read_str(r, length)
+
+    // Verify checksum
+    let checksum = buf_read_u32(r)
+    let mut sum = 0
+    for i in range len(payload) {
+        sum = sum + int(payload[i])
+    }
+    if sum != checksum {
+        buf_free(r)
+        print("error: checksum mismatch")
+        return ""
+    }
+
+    buf_free(r)
+    print_int(version)     // 1
+    print_int(msg_type)    // message type
+    return payload
+}
+
+fn main() {
+    // Encode a request message (type=1)
+    let wire = encode_message(1, "{\"action\":\"ping\"}")
+
+    // Decode it
+    let payload = decode_message(wire)
+    print(payload)   // {"action":"ping"}
+
+    // Encode a response (type=2)
+    let resp = encode_message(2, "{\"status\":\"ok\"}")
+    let resp_payload = decode_message(resp)
+    print(resp_payload)   // {"status":"ok"}
+}
+```
+
+This pattern applies to any length-prefixed binary protocol: database wire
+formats, game networking packets, sensor data streams, or custom RPC frames.
+The `Buf` type handles byte ordering so you can focus on the protocol logic.
+
+---
+
+## Event-Driven Server (Event Loop)
+
+A non-blocking server using the event loop that handles many connections without
+one thread per client:
+
+```mko
+fn main() {
+    let el = evloop_new()
+    let server = nb_listen(8080)
+    let _ = evloop_add(el, server, 1)
+    print("event-driven server on :8080")
+
+    let mut served = 0
+    while served < 100 {
+        let n = evloop_wait(el, 1000)
+        let mut i = 0
+        while i < n {
+            let fd = evloop_event_fd(el, i)
+            if fd == server {
+                let client = nb_accept(server)
+                if client >= 0 {
+                    let _ = evloop_add(el, client, 1)
+                }
+            } else {
+                let data = nb_read(fd)
+                if len(data) > 0 {
+                    let _ = nb_write(fd, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nok\n")
+                }
+                let _ = evloop_del(el, fd)
+                let _ = nb_close(fd)
+                served = served + 1
+            }
+            i = i + 1
+        }
+    }
+    let _ = nb_close(server)
+    let _ = evloop_close(el)
+}
+```
+
+Build and test:
+
+```bash
+mako build evserver.mko -o out/evserver
+out/evserver &
+curl http://127.0.0.1:8080/
+# ok
+```
+
+---
+
+## Game Loop with Tick Rate
+
+A fixed-timestep game loop using `tick_now_us` and `tick_sleep_us` to maintain
+a consistent tick rate:
+
+```mko
+fn main() {
+    let u = game_udp_bind(27015)
+    let tick_rate_us = 16666  // ~60 ticks per second
+    let max_ticks = 600       // run for ~10 seconds
+
+    let mut tick = 0
+    while tick < max_ticks {
+        let start = tick_now_us()
+
+        // Process incoming packets
+        let data = game_udp_recv(u)
+        if len(data) > 0 {
+            let peer = game_udp_sender(u)
+            // Echo back with tick number
+            let _ = game_udp_send(u, peer, "tick:" + string(tick))
+        }
+
+        // Broadcast world state to all connected peers
+        if game_udp_peers(u) > 0 {
+            let _ = game_udp_broadcast(u, "state:" + string(tick))
+        }
+
+        tick = tick + 1
+        // Sleep the remainder of the tick interval
+        let _ = tick_sleep_us(start, tick_rate_us)
+    }
+
+    print("game server done, ticks:")
+    print_int(tick)
+    game_udp_close(u)
+}
+```
+
+The `tick_sleep_us` function calculates how long has elapsed since `start` and
+sleeps only the remaining time to hit the target interval. If the tick took
+longer than the interval, it returns immediately (no negative sleep).
+
+---
+
+## Rate-Limited API
+
+Protect an HTTP endpoint with a token-bucket rate limiter:
+
+```mko
+fn main() {
+    let fd = http_bind(8080)
+    if fd < 0 {
+        print("bind failed")
+        return
+    }
+
+    // Allow 10 requests/second with a burst of 5
+    let rl = ratelimit_new(10, 5)
+
+    let mut n = 0
+    while n < 50 {
+        let c = http_accept(fd)
+        if c < 0 {
+            continue
+        }
+
+        if ratelimit_allow(rl) == 1 {
+            let remaining = ratelimit_remaining(rl)
+            let body = "{\"ok\":true,\"remaining\":" + string(remaining) + "}\n"
+            let _ = http_respond_json(c, 200, body)
+        } else {
+            let _ = http_respond_json(c, 429, "{\"error\":\"rate limit exceeded\"}\n")
+        }
+        let _ = http_close(c)
+        n = n + 1
+    }
+
+    ratelimit_free(rl)
+    let _ = http_close_listener(fd)
+}
+```
+
+Build and test:
+
+```bash
+mako build ratelimit_api.mko -o out/ratelimit_api
+out/ratelimit_api &
+# First 5 requests succeed (burst), then throttled to 10/sec
+for i in $(seq 1 8); do curl -s http://127.0.0.1:8080/; done
+```
+
+---
+
+## Circuit Breaker Pattern
+
+Wrap calls to an unreliable downstream service with a circuit breaker to
+fail fast when the service is unhealthy:
+
+```mko
+fn call_service(cb: CircuitBreaker) -> int {
+    if breaker_allow(cb) == 0 {
+        // Circuit is open -- fail fast
+        return -1
+    }
+
+    // Simulate calling a downstream service
+    // In real code, this would be http_get or similar
+    let success = 0  // simulate failure for demo
+
+    if success == 1 {
+        breaker_success(cb)
+        return 1
+    } else {
+        breaker_failure(cb)
+        return 0
+    }
+}
+
+fn main() {
+    // Open after 3 failures, 5-second timeout, 2 half-open probes
+    let cb = breaker_new(3, 5000, 2)
+
+    // Simulate requests
+    let mut i = 0
+    while i < 10 {
+        let result = call_service(cb)
+        let state = breaker_state(cb)
+
+        if state == 0 {
+            print("closed - attempting request")
+        } else {
+            if state == 1 {
+                print("open - failing fast")
+            } else {
+                print("half-open - probing")
+            }
+        }
+        print_int(result)
+
+        i = i + 1
+        sleep_ms(100)
+    }
+
+    // Manual reset for recovery
+    breaker_reset(cb)
+    print_int(breaker_state(cb))  // 0 (closed)
+    breaker_free(cb)
+}
+```
+
+The circuit breaker transitions:
+1. **Closed** (normal): requests pass through, failures counted
+2. **Open** (protecting): after threshold failures, all requests rejected
+3. **Half-open** (probing): after timeout, limited requests allowed to test recovery
+
+This pattern prevents cascading failures in microservice architectures.
+
 Next: [Appendix](ch15-appendix.md).

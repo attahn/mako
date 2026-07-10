@@ -664,6 +664,155 @@ Design accordingly:
 
 ---
 
+## Event Loop and Non-blocking I/O
+
+For servers that must handle many concurrent connections without a thread per
+connection, Mako provides a non-blocking event loop (`runtime/mako_evloop.h`).
+It uses epoll on Linux and kqueue on macOS under the hood.
+
+### Non-blocking TCP Server
+
+```mko
+fn main() {
+    let el = evloop_new()
+    let server_fd = nb_listen(8080)
+    let _ = evloop_add(el, server_fd, 1)  // monitor for readability
+
+    while true {
+        let n = evloop_wait(el, 1000)
+        let mut i = 0
+        while i < n {
+            let fd = evloop_event_fd(el, i)
+            if fd == server_fd {
+                let client = nb_accept(server_fd)
+                if client >= 0 {
+                    let _ = evloop_add(el, client, 1)
+                }
+            } else {
+                let data = nb_read(fd)
+                if len(data) > 0 {
+                    let _ = nb_write(fd, "echo: " + data)
+                }
+                let _ = evloop_del(el, fd)
+                let _ = nb_close(fd)
+            }
+            i = i + 1
+        }
+    }
+    let _ = evloop_close(el)
+}
+```
+
+### Event Loop API
+
+| Function | Purpose |
+|----------|---------|
+| `evloop_new()` | Create event loop |
+| `evloop_add(el, fd, flags)` | Register fd |
+| `evloop_mod(el, fd, flags)` | Modify interest flags |
+| `evloop_del(el, fd)` | Remove fd |
+| `evloop_wait(el, timeout_ms)` | Wait for events, returns count |
+| `evloop_event_fd(el, index)` | Get fd from event at index |
+| `evloop_event_flags(el, index)` | Get flags from event at index |
+| `evloop_close(el)` | Destroy event loop |
+
+### Non-blocking Socket Helpers
+
+| Function | Purpose |
+|----------|---------|
+| `nb_listen(port)` | Create non-blocking TCP listener |
+| `nb_accept(fd)` | Non-blocking accept |
+| `nb_read(fd)` | Non-blocking read (returns available data) |
+| `nb_write(fd, data)` | Non-blocking write |
+| `nb_udp_bind(port)` | Non-blocking UDP socket |
+| `nb_udp_recv(fd)` | Non-blocking UDP receive |
+| `nb_close(fd)` | Close non-blocking socket |
+
+---
+
+## Game UDP Networking
+
+For real-time game servers, Mako provides a dedicated UDP networking subsystem
+(`runtime/mako_game.h`) that tracks connected peers and supports broadcast:
+
+```mko
+fn main() {
+    let u = game_udp_bind(27015)
+    let el = evloop_new()
+    let _ = evloop_add(el, game_udp_fd(u), 1)
+
+    let interval_us = 16666  // ~60 Hz tick rate
+    while true {
+        let start = tick_now_us()
+        let n = evloop_wait(el, 1)
+        if n > 0 {
+            let data = game_udp_recv(u)
+            let peer = game_udp_sender(u)
+            // Process input from peer, then broadcast state
+            let _ = game_udp_broadcast(u, "world_state")
+        }
+        let _ = tick_sleep_us(start, interval_us)
+    }
+    game_udp_close(u)
+    let _ = evloop_close(el)
+}
+```
+
+### Game UDP API
+
+| Function | Purpose |
+|----------|---------|
+| `game_udp_bind(port)` | Bind UDP game socket |
+| `game_udp_recv(u)` | Receive packet (tracks sender) |
+| `game_udp_sender(u)` | Get peer ID of last sender |
+| `game_udp_send(u, peer, data)` | Send to specific peer |
+| `game_udp_broadcast(u, data)` | Send to all connected peers |
+| `game_udp_kick(u, peer)` | Disconnect a peer |
+| `game_udp_peers(u)` | Number of connected peers |
+| `game_udp_fd(u)` | Raw fd for event loop integration |
+| `game_udp_close(u)` | Close socket |
+| `tick_now_us()` | Microsecond timestamp |
+| `tick_sleep_us(start, interval)` | Sleep to maintain tick rate |
+
+The `game_udp_fd` function returns the raw file descriptor so you can integrate
+the game socket into an event loop alongside other I/O sources.
+
+---
+
+## HTTP Engine (Declarative Routing)
+
+For applications that want declarative route registration instead of manual
+path matching, Mako provides an HTTP engine (`runtime/mako_httpengine.h`):
+
+```mko
+fn main() {
+    let e = httpengine_new()
+    let _ = httpengine_route(e, "GET", "/health", 1)
+    let _ = httpengine_route(e, "GET", "/api/users", 2)
+    let _ = httpengine_route(e, "POST", "/api/users", 3)
+    let _ = httpengine_start(e, 8080)
+    // Engine runs, dispatching requests to handler IDs
+    httpengine_stop(e)
+    httpengine_free(e)
+}
+```
+
+### HTTP Engine API
+
+| Function | Purpose |
+|----------|---------|
+| `httpengine_new()` | Create HTTP engine instance |
+| `httpengine_route(e, method, path, handler_id)` | Register a route with a handler ID |
+| `httpengine_start(e, port)` | Start listening and serving |
+| `httpengine_stop(e)` | Stop the engine |
+| `httpengine_free(e)` | Destroy the engine |
+
+The engine builds on the event loop internally for non-blocking I/O. Use it
+when you want a higher-level abstraction over the raw `http_bind`/`http_accept`
+loop.
+
+---
+
 ## Summary
 
 | Layer | Functions |
@@ -673,6 +822,10 @@ Design accordingly:
 | HTTP Response | `http_respond`, `http_respond_ct`, `http_respond_json`, `http_close` |
 | HTTPS | `tls_serve_n`, `tls_serve_h2_routes`, `tls_connect` |
 | WebSocket | `ws_echo_once` |
+| Event Loop | `evloop_new`, `evloop_add`, `evloop_wait`, `evloop_event_fd`, `evloop_close` |
+| Non-blocking I/O | `nb_listen`, `nb_accept`, `nb_read`, `nb_write`, `nb_close` |
+| Game UDP | `game_udp_bind`, `game_udp_recv`, `game_udp_send`, `game_udp_broadcast` |
+| HTTP Engine | `httpengine_new`, `httpengine_route`, `httpengine_start`, `httpengine_stop` |
 | Shutdown | `http_shutdown_begin`, `http_shutdown_requested`, `http_active_connections` |
 | Listener | `http_close_listener` |
 
