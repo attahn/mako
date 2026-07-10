@@ -1,0 +1,10 @@
+// Must fail: `break` leaves outer share live — mut after loop conflicts.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    while true {
+        break
+    }
+    x = 2
+    print_int(share_get(s))
+}

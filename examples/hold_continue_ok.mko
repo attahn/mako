@@ -1,0 +1,13 @@
+// Dead code after `continue` must not run for NLL (same straight-line rule).
+fn consume(t: string) {}
+
+fn main() {
+    hold let s = "hi"
+    let mut i = 0
+    while i < 1 {
+        i = i + 1
+        continue
+        consume(s)
+    }
+    print(s)
+}

@@ -1,0 +1,98 @@
+fn TestUrlParse() {
+    let u = "https://example.com:443/a/b?x=1#frag"
+    assert_eq_str(url_scheme(u), "https")
+    assert_eq_str(url_host(u), "example.com:443")
+    assert_eq_str(url_path(u), "/a/b")
+    assert_eq_str(url_query(u), "x=1")
+    assert(str_contains(url_query_escape("a b"), "+") || str_contains(url_query_escape("a b"), "%20"))
+}
+
+fn TestCsvXmlHtml() {
+    let row = csv_split_line("a,\"b,c\",d")
+    assert_eq(len(row), 3)
+    assert_eq_str(row[1], "b,c")
+    assert_eq_str(csv_join_row(["x", "y"]), "x,y")
+    assert_eq_str(xml_escape("<&>"), "&lt;&amp;&gt;")
+    assert_eq_str(html_escape("\"hi\""), "&quot;hi&quot;")
+    assert_eq_str(xml_tag_text("<root><n>42</n></root>", "n"), "42")
+}
+
+fn TestMimeTarTemplate() {
+    assert_eq_str(mime_type("x.json"), "application/json")
+    assert_eq_str(mime_type("a.png"), "image/png")
+    let path = "/tmp/mako_tar_test.tar"
+    assert_eq(tar_write_file(path, "hello.txt", "hi"), 0)
+    assert_eq_str(tar_first_name(path), "hello.txt")
+    let _ = remove_file(path)
+    assert_eq_str(template_execute("Hello {{name}}!", "name", "Mako"), "Hello Mako!")
+}
+
+fn TestBytesBufferRandContext() {
+    let b = bytes_buffer()
+    bytes_buffer_write(b, "ab")
+    bytes_buffer_write(b, "cd")
+    assert_eq(bytes_buffer_len(b), 4)
+    assert_eq_str(bytes_buffer_string(b), "abcd")
+    bytes_buffer_reset(b)
+    assert_eq(bytes_buffer_len(b), 0)
+    rand_seed(42)
+    let a = rand_intn(100)
+    rand_seed(42)
+    assert_eq(rand_intn(100), a)
+    let dl = context_with_timeout(5000)
+    assert_eq(context_expired(dl), 0)
+    assert(context_remaining(dl) > 0)
+}
+
+fn TestBase32ShaUtf8SlicesAtomic() {
+    assert(len(base32_encode("f")) > 0)
+    let h = sha1("abc")
+    // empty if no CC/OpenSSL; otherwise known digest
+    if len(h) == 40 {
+        assert_eq_str(h, "a9993e364706816aba3e25717850c26c9cd0d89d")
+    }
+    let h5 = sha512("abc")
+    assert(len(h5) == 0 || len(h5) == 128)
+    assert_eq(utf8_valid("café"), 1)
+    assert_eq(utf8_rune_len(233), 2)
+    let rev = slices_reverse([1, 2, 3])
+    assert_eq(rev[0], 3)
+    let u = slices_unique([3, 1, 3, 2, 1])
+    assert_eq(len(u), 3)
+    assert_eq(u[0], 1)
+    let at = atomic_new(10)
+    assert_eq(atomic_load(at), 10)
+    assert_eq(atomic_add(at, 5), 15)
+    atomic_store(at, 1)
+    assert_eq(atomic_cas(at, 1, 2), 1)
+    assert_eq(atomic_load(at), 2)
+}
+
+fn TestParseIpLookup() {
+    assert_eq(parse_ip_ok("127.0.0.1"), 1)
+    assert_eq(parse_ip_ok("not-an-ip"), 0)
+    // DNS may fail offline — empty string ok
+    let ip = lookup_host("localhost")
+    assert(len(ip) == 0 || parse_ip_ok(ip) == 1)
+}
+
+fn TestGzipSoft() {
+    if gzip_available() == 1 {
+        let c = gzip_compress("hello gzip")
+        assert(len(c) > 0)
+        assert_eq_str(gzip_decompress(c), "hello gzip")
+    } else {
+        assert_eq_str(gzip_compress("x"), "")
+    }
+}
+
+fn TestFlagDefaults() {
+    // No matching argv flags in test harness → defaults
+    assert_eq_str(flag_string("missing_flag_xyz", "def"), "def")
+    assert_eq(flag_int("missing_flag_xyz", 9), 9)
+}
+
+fn TestExecEcho() {
+    let out = exec_output("echo mako_exec_ok")
+    assert(str_contains(out, "mako_exec_ok"))
+}

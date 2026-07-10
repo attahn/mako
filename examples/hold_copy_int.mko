@@ -1,0 +1,5 @@
+fn main() {
+    hold let x = 7
+    print_int(x)
+    print_int(x)
+}

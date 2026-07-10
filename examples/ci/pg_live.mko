@@ -1,0 +1,9 @@
+// Live Postgres probe for scripts/ci-postgres.sh (docker on :5433 by default).
+fn main() {
+    let c = pg_connect("host=127.0.0.1 port=5433 dbname=mako user=mako password=mako connect_timeout=3")
+    assert_eq(pg_ok(c), 1)
+    assert_eq(pg_exec(c, "SELECT 1"), 0)
+    assert_eq(pg_exec_row_count(c, "SELECT 1 AS x"), 1)
+    assert_eq(pg_close(c), 0)
+    print(1)
+}

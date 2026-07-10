@@ -1,0 +1,19 @@
+// Nested partial moves: p.inner.a moves only that path
+
+struct Inner {
+    a: int
+    b: int
+}
+
+struct Outer {
+    inner: Inner
+    n: int
+}
+
+fn main() {
+    hold let p = Outer { inner: Inner { a: 1, b: 2 }, n: 9 }
+    let a = p.inner.a
+    print_int(a)
+    print_int(p.inner.b)
+    print_int(p.n)
+}

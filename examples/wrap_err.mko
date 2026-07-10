@@ -1,0 +1,15 @@
+// wrap_err prefixes Err messages; Ok passes through
+
+fn fail() -> Result[int, string] {
+    return error("boom")
+}
+
+fn main() {
+    let r = wrap_err(fail(), "parse")
+    match r {
+        Ok(v) => print_int(v),
+        Err(e) => print(e),
+    }
+    let ok = wrap_err(Ok(7), "unused")
+    print_int(result_unwrap_or(ok, 0))
+}

@@ -1,0 +1,8 @@
+fn TestPathJoin() {
+    let p = path_join("a", "b")
+    assert_eq(str_len(p), 3)
+    let p2 = path_join("a/", "b")
+    assert_eq(str_len(p2), 3)
+    let t = now_ms()
+    assert(t > 0)
+}

@@ -1,0 +1,22 @@
+struct Counter {
+    n: int
+}
+
+interface Adder {
+    fn add(int) -> int
+}
+
+fn Adder_add(self: Counter, delta: int) -> int {
+    return self.n + delta
+}
+
+fn use_adder(a: Adder, d: int) -> int {
+    return a.add(d)
+}
+
+fn TestIfaceDyn() {
+    let c = Counter { n: 10 }
+    let a: Adder = c
+    assert_eq(a.add(5), 15)
+    assert_eq(use_adder(c, 7), 17)
+}

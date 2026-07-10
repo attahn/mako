@@ -1,0 +1,9 @@
+// dbg / dbg_str — stderr file:line + value (clang -g debug builds).
+fn main() {
+    let x = 42
+    let y = dbg(x)
+    assert_eq(y, 42)
+    let s = dbg_str("hi")
+    assert(str_eq(s, "hi"))
+    print("ok")
+}

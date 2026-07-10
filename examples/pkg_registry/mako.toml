@@ -1,0 +1,10 @@
+# Local registry seed (no network)
+#
+# Layout: `.mako/registry/<name>/<version>/mako.toml`
+# Manifest: `"util" = { version = "^1.0.0" }` resolves highest matching SemVer.
+
+name = "app"
+version = "0.1.0"
+
+[dependencies]
+"util" = { version = "^1.0.0" }

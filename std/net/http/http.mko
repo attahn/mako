@@ -1,0 +1,12 @@
+fn bind(port: int) -> int { return http_bind(port) }
+fn accept(fd: int) -> int { return http_accept(fd) }
+fn method(conn: int) -> string { return http_method(conn) }
+fn path(conn: int) -> string { return http_path(conn) }
+fn body(conn: int) -> string { return http_body(conn) }
+fn respond(conn: int, status: int, body: string) -> int { return http_respond(conn, status, body) }
+fn get(url: string) -> string { return http_get(url) }
+fn post(url: string, body: string) -> string { return http_post(url, body) }
+fn parse_request(raw: string) -> HttpRequest { return http_request_parse(raw) }
+fn request_method(r: HttpRequest) -> string { return http_request_method(r) }
+fn request_path(r: HttpRequest) -> string { return http_request_path(r) }
+fn request_body(r: HttpRequest) -> string { return http_request_body(r) }

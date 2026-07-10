@@ -1,0 +1,11 @@
+struct Point {
+    x: int
+    y: int
+}
+
+fn TestHoldPartial() {
+    hold let p = Point { x: 3, y: 4 }
+    let x = p.x
+    assert_eq(x, 3)
+    assert_eq(p.y, 4)
+}

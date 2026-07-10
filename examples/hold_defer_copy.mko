@@ -1,0 +1,7 @@
+// Defer may use a Copy hold that was only copied (not moved).
+fn main() {
+    hold let x = 7
+    defer print_int(x)
+    let y = x
+    print_int(y)
+}

@@ -1,0 +1,12 @@
+// CFG-ish NLL: share last-used in both if/else arms → mut after join OK.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    if 0 == 1 {
+        print_int(share_get(s))
+    } else {
+        print_int(share_get(s))
+    }
+    x = 2
+    print_int(x)
+}

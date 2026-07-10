@@ -1,0 +1,11 @@
+// Must fail: const-true if takes only then — move reaches after join.
+fn consume(t: string) {}
+
+fn main() {
+    hold let s = "hi"
+    if true {
+        consume(s)
+    } else {
+    }
+    print(s)
+}

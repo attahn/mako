@@ -1,0 +1,92 @@
+# Mako keywords
+
+Source of truth: `src/lexer/mod.rs` → `lex_ident` (38 reserved words).  
+Every identifier that matches one of these strings is always a keyword token — never
+an `Ident`. There are **no contextual keywords** today (unlike Rust’s `async`/`await`
+in some positions): you cannot name a variable `crew` or `default`.
+
+**Not keywords** (ordinary identifiers / builtins): type names (`int`, `int8`, `int32`, `int64`,
+`uint64`, `byte`, `float`/`float64`, `string`, …), `map` (type constructor `map[K]V`, not reserved),
+conversions `T(x)` / `bytes(s)`, `Ok`/`Err`/`assert*`/`t_run`, `len`/`cap`/`append`/`copy`/
+`rune_count`/`has`/`delete`/`str_builder`/`builder_*`/`uuid_*`, etc. See [GUIDE.md](GUIDE.md).
+
+Guided tour: [The Mako Book](book/) · Full syntax: [GUIDE.md](GUIDE.md) · Design: [LANGUAGE.md](LANGUAGE.md).
+
+---
+
+## Declarations
+
+| Keyword | Meaning |
+|---------|---------|
+| `fn` | Function (or interface method) declaration |
+| `struct` | Product type with named fields |
+| `enum` | Sum type with variants |
+| `actor` | Actor type with `receive` arms |
+| `receive` | Actor message handler arm |
+| `interface` | Named method set (light interfaces) |
+| `extern` | Foreign declaration (`extern "C" fn …`) |
+| `const` | Compile-time constant binding |
+| `import` | Merge another `.mko` / std package: `import "strings"`, Go group `import ( "a" \n "b" )`, brace `import { "a"; "b" }`, alias `import x "path"` or `import "path" as x` |
+| `let` | Local binding |
+| `mut` | Mutable parameter or binding marker |
+
+## Control flow
+
+| Keyword | Meaning |
+|---------|---------|
+| `if` / `else` | Conditional |
+| `while` | Loop while condition holds |
+| `for` / `in` / `range` | Iteration (`for i, v in range s`, `for i in n`, …) |
+| `break` / `continue` | Exit / next iteration of innermost `for`/`while` |
+| `return` | Return from function |
+| `defer` | Run on function exit (LIFO), including before `return` |
+| `match` | Pattern match on enums / Option / Result / ints |
+
+## Literals / logic
+
+| Keyword | Meaning |
+|---------|---------|
+| `true` / `false` | Bool literals |
+| `and` / `or` / `not` | Boolean operators (word forms; Go-style `&&` / `\|\|` / `!` also work) |
+
+## Operators (Go-idiomatic; not keywords)
+
+| Form | Meaning |
+|------|---------|
+| `=` | Assignment only (never equality) |
+| `==` `!=` `<` `>` `<=` `>=` | Comparison |
+| `&&` `\|\|` `!` | Logical and / or / not (short-circuit `&&`/`\|\|`); `!!x` is two `!` |
+| `and` `or` `not` | Same as `&&` / `\|\|` / `!` |
+| `&` `\|` `^` `&^` `<<` `>>` | Bitwise (Go); unary `^x` is bitwise complement |
+| Leading `\|…\|` | Still a lambda; infix `\|` is bitwise or |
+
+## Concurrency
+
+| Keyword | Meaning |
+|---------|---------|
+| `crew` | Structured concurrency scope |
+| `kick` | Spawn work on a crew (also `.kick(…)`) |
+| `join` | Wait for a kicked job (also `.join()`) |
+| `fan` | Data-parallel map over a range/collection |
+| `select` | Multi-way channel wait |
+| `timeout` | Select arm: wait up to N ms |
+| `default` | Select arm: non-blocking fallback |
+
+## Memory / ownership
+
+| Keyword | Meaning |
+|---------|---------|
+| `arena` | Bump-allocation region (freed on scope exit) |
+| `hold` | Move-on-rebind ownership binding |
+| `share` | Shared / RC-style binding (seed) |
+| `as` | Type / ownership cast helper in expressions |
+
+## Alphabetical (complete)
+
+```
+actor and arena as break const continue crew default defer else enum extern false
+fan fn for hold if import in interface join kick let match mut not or range receive
+return select share struct timeout true while
+```
+
+(38 words — must match `lex_ident` exactly.)

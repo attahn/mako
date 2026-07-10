@@ -1,0 +1,5 @@
+fn buffer() -> BytesBuffer { return bytes_buffer() }
+fn write(b: BytesBuffer, s: string) { bytes_buffer_write(b, s) }
+fn string(b: BytesBuffer) -> string { return bytes_buffer_string(b) }
+fn len(b: BytesBuffer) -> int { return bytes_buffer_len(b) }
+fn reset(b: BytesBuffer) { bytes_buffer_reset(b) }

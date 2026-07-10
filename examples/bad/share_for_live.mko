@@ -1,0 +1,10 @@
+// Must fail: outer share still used in for body while mutating source.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    for i in range 2 {
+        x = 2
+        print_int(share_get(s))
+        print_int(i)
+    }
+}

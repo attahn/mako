@@ -1,0 +1,2 @@
+fn valid(s: string) -> int { return utf8_valid(s) }
+fn rune_len(r: int) -> int { return utf8_rune_len(r) }

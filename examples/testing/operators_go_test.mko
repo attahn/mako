@@ -1,0 +1,38 @@
+fn side_effect_flag() -> bool {
+    // Used only to prove short-circuit: if evaluated, test fails via assert below.
+    assert(false)
+    return true
+}
+
+fn TestCmpOps() {
+    assert(1 == 1)
+    assert(1 != 2)
+    assert(1 < 2)
+    assert(2 > 1)
+    assert(2 <= 2)
+    assert(3 >= 2)
+    assert(!(1 == 2))
+    assert(!!true)
+    assert(!false)
+    assert(not false)
+}
+
+fn TestLogicalShortCircuit() {
+    assert((false && side_effect_flag()) == false)
+    assert((true || side_effect_flag()) == true)
+    assert(true && true)
+    assert(false || true)
+    assert((1 == 1) and (2 == 2))
+    assert((1 == 2) or (2 == 2))
+}
+
+fn TestBitwiseGo() {
+    assert_eq(5 & 3, 1)
+    assert_eq(5 | 2, 7)
+    assert_eq(5 ^ 1, 4)
+    assert_eq(5 &^ 1, 4)
+    assert_eq(1 << 3, 8)
+    assert_eq(16 >> 2, 4)
+    assert_eq(^0 & 255, 255)
+    assert_eq(1 << 4, 16)
+}

@@ -1,0 +1,11 @@
+// Must fail: fan lambda captures/moves hold → use after is use-after-move.
+fn take(s: string) -> int {
+    len(s)
+}
+
+fn main() {
+    hold let x = "hi"
+    let ys = fan([1], |n| take(x) + n)
+    print(x)
+    print_int(ys[0])
+}

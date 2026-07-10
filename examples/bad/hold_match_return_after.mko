@@ -1,0 +1,17 @@
+// Must fail: reachable arm may move `s` → use after match is use-after-move.
+fn consume(x: string) {}
+
+fn main() -> int {
+    hold let s = "hi"
+    let n = match 1 {
+        0 => {
+            return 0
+        }
+        _ => {
+            consume(s)
+            1
+        }
+    }
+    print(s)
+    return n
+}

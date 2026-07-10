@@ -1,0 +1,6 @@
+// Tiny HTTP/1.1 server — v0 stdlib slice (see docs/STDLIB.md)
+fn main() {
+    print("starting http on :18080")
+    // blocks and serves until killed
+    http_serve(18080, "ok\n")
+}

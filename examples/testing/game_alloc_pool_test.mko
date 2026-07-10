@@ -1,0 +1,56 @@
+fn TestFrameAllocatorOffsetsAndReset() {
+    let _ = alloc_track_reset()
+    let f = frame_alloc_new(64)
+    assert(f > 0)
+    assert_eq(frame_cap(f), 64)
+    assert_eq(frame_used(f), 0)
+    assert_eq(frame_alloc(f, 16), 0)
+    assert_eq(frame_alloc(f, 24), 16)
+    assert_eq(frame_used(f), 40)
+    assert_eq(frame_alloc(f, 25), -1)
+    assert_eq(frame_used(f), 40)
+    assert_eq(frame_reset(f), 1)
+    assert_eq(frame_used(f), 0)
+    assert_eq(frame_alloc(0, 8), -1)
+}
+
+fn TestObjectPoolReuseAndValidation() {
+    let p = obj_pool_new(2)
+    assert(p > 0)
+    assert_eq(obj_pool_cap(p), 2)
+    assert_eq(obj_available(p), 2)
+
+    let a = obj_acquire(p)
+    let b = obj_acquire(p)
+    assert(a > 0)
+    assert(b > 0)
+    assert(a != b)
+    assert_eq(obj_available(p), 0)
+    assert_eq(obj_acquire(p), 0)
+
+    assert_eq(obj_release(p, a), 1)
+    assert_eq(obj_release(p, a), 0)
+    assert_eq(obj_available(p), 1)
+    let c = obj_acquire(p)
+    assert_eq(c, a)
+    assert_eq(obj_release(p, b), 1)
+    assert_eq(obj_release(p, c), 1)
+    assert_eq(obj_available(p), 2)
+}
+
+fn TestAllocationTrackingCounters() {
+    let _ = alloc_track_reset()
+    assert_eq(alloc_live_bytes(), 0)
+    assert_eq(alloc_high_bytes(), 0)
+    assert_eq(alloc_track_alloc(100), 100)
+    assert_eq(alloc_track_alloc(50), 150)
+    assert_eq(alloc_high_bytes(), 150)
+    assert_eq(alloc_track_free(70), 80)
+    assert_eq(alloc_live_bytes(), 80)
+    assert_eq(alloc_high_bytes(), 150)
+    assert_eq(alloc_track_free(999), 0)
+
+    let report = alloc_report_json()
+    assert(str_contains(report, "\"live_bytes\":0"))
+    assert(str_contains(report, "\"high_water_bytes\":150"))
+}

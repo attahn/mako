@@ -1,0 +1,7 @@
+fn takes_int(n: int) -> int {
+    return n
+}
+
+fn main() {
+    print_int(takes_int("x"))
+}

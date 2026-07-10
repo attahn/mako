@@ -1,0 +1,26 @@
+// []string — make, index, append, range, slice
+
+fn main() {
+    let mut s = make([]string, 2, 4)
+    s[0] = "hello"
+    s[1] = "mako"
+    print(s[0])
+    print(s[1])
+    print_int(len(s))
+    print_int(cap(s))
+
+    s = append(s, "!")
+    print_int(len(s))
+    print(s[2])
+
+    let mut lit: []string = ["a", "b", "c"]
+    print_int(len(lit))
+    for i, v in range lit {
+        print_int(i)
+        print(v)
+    }
+
+    let t = lit[1:3]
+    print_int(len(t))
+    print(t[0])
+}

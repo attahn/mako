@@ -1,0 +1,3 @@
+fn parse_address(addr: string) -> string { return mail_parse_address(addr) }
+fn header_get(msg: string, name: string) -> string { return mail_header_get(msg, name) }
+fn address_ok(addr: string) -> int { return mail_address_ok(addr) }

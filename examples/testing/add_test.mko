@@ -1,0 +1,20 @@
+// Go-like tests: fn TestXxx() discovered by `mako test`.
+
+fn TestAdd() {
+    assert_eq(add(2, 3), 5)
+    assert_eq(add(-1, 1), 0)
+}
+
+fn TestAddTable() {
+    // Table-driven (Go style)
+    let cases_a = [1, 2, 10]
+    let cases_b = [1, 3, 5]
+    let want = [2, 5, 15]
+    for i in 3 {
+        assert_eq(add(cases_a[i], cases_b[i]), want[i])
+    }
+}
+
+fn TestMul() {
+    assert_eq(mul(3, 4), 12)
+}

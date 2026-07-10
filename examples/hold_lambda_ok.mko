@@ -1,0 +1,7 @@
+// Must succeed: lambda does not capture hold (fan mapper).
+fn main() {
+    hold let x = "hi"
+    let ys = fan([1, 2], |n| n + 1)
+    print(x)
+    print_int(ys[0])
+}

@@ -1,0 +1,10 @@
+fn TestSort() {
+    let xs = sort_ints([3, 1, 2])
+    assert_eq(xs[0], 1)
+    assert_eq(xs[1], 2)
+    assert_eq(xs[2], 3)
+    let ss = sort_strings(["c", "a", "b"])
+    assert_eq_str(ss[0], "a")
+    assert_eq_str(ss[1], "b")
+    assert_eq_str(ss[2], "c")
+}

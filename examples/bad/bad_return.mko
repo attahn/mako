@@ -1,0 +1,7 @@
+fn bad() -> int {
+    return "nope"
+}
+
+fn main() {
+    print_int(bad())
+}

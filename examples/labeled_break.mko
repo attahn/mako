@@ -1,0 +1,15 @@
+// Labeled break/continue — break outer from nested loop.
+fn main() {
+    let mut n = 0
+    outer: while true {
+        let mut j = 0
+        while j < 3 {
+            j = j + 1
+            n = n + 1
+            if n == 2 {
+                break outer
+            }
+        }
+    }
+    print_int(n)
+}

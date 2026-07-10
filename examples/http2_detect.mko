@@ -1,0 +1,13 @@
+fn main() {
+    let pref = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+    if http2_detect(pref) {
+        print_int(1)
+    } else {
+        print_int(0)
+    }
+    if http2_detect("GET / HTTP/1.1") {
+        print_int(1)
+    } else {
+        print_int(0)
+    }
+}

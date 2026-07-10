@@ -1,0 +1,20 @@
+// No-self methods as dyn (unit vtable)
+
+interface Writer {
+    fn write(string) -> int
+}
+
+fn Writer_write(s: string) -> int {
+    print(s)
+    return str_len(s)
+}
+
+fn use_writer(w: Writer, msg: string) -> int {
+    return w.write(msg)
+}
+
+fn main() {
+    let w: Writer = 0
+    print_int(w.write("hi"))
+    print_int(use_writer(0, "yo"))
+}

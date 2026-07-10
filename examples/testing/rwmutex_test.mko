@@ -1,0 +1,19 @@
+fn TestRWMutexBasic() {
+    let m = rwmutex_new()
+    rwmutex_rlock(m)
+    rwmutex_runlock(m)
+    rwmutex_lock(m)
+    rwmutex_unlock(m)
+    assert(true)
+}
+
+fn TestRWMutexNestedReaders() {
+    let m = rwmutex_new()
+    rwmutex_rlock(m)
+    rwmutex_rlock(m)
+    rwmutex_runlock(m)
+    rwmutex_runlock(m)
+    rwmutex_lock(m)
+    rwmutex_unlock(m)
+    assert(true)
+}

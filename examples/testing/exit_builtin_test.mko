@@ -1,0 +1,7 @@
+fn TestExitBuiltinCompiles() {
+    // exit is a real builtin; do not call it here (would kill the harness).
+    if false {
+        exit(1)
+    }
+    assert(true)
+}

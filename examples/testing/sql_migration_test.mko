@@ -1,0 +1,35 @@
+fn TestSqlMigrateApplyAndSkip() {
+    let db = sql_open_sqlite(":memory:")
+    assert_eq(sql_ok(db), 1)
+
+    assert_eq(sql_migration_applied(db, 1), 0)
+
+    let applied = sql_migrate(db, 1, "create table mako_migration_demo (id integer primary key)")
+    if applied == 1 {
+        assert_eq(sql_migration_applied(db, 1), 1)
+        assert_eq(sql_migrate(db, 1, "create table should_not_run (id integer)"), 0)
+
+        let empty = make([]int, 0)
+        assert_eq(sql_query_int(db, "select count(*) from mako_migration_demo", empty), 0)
+    } else {
+        assert_eq(applied, -1)
+    }
+
+    let _ = sql_close(db)
+}
+
+fn TestSqlMigrateInvalidInputs() {
+    let db = sql_open_sqlite(":memory:")
+    assert_eq(sql_ok(db), 1)
+    assert_eq(sql_migration_applied(db, 0), -1)
+    assert_eq(sql_migrate(db, 0, "select 1"), -1)
+    assert_eq(sql_migrate(db, -1, "select 1"), -1)
+    let _ = sql_close(db)
+
+    let pg = sql_open_postgres("postgres://127.0.0.1:1/none")
+    if sql_ok(pg) == 0 {
+        assert_eq(sql_migration_applied(pg, 1), -1)
+        assert_eq(sql_migrate(pg, 1, "select 1"), -1)
+    }
+    let _ = sql_close(pg)
+}

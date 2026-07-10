@@ -1,0 +1,32 @@
+fn TestLeakMarkDetectAndReport() {
+    let _ = alloc_track_reset()
+    let mark = leak_mark()
+    assert_eq(mark, 0)
+    assert_eq(leak_bytes_since(mark), 0)
+    assert_eq(leak_detected(mark), 0)
+    assert_eq(leak_assert_clear(mark), 1)
+
+    assert_eq(alloc_track_alloc(64), 64)
+    assert_eq(leak_bytes_since(mark), 64)
+    assert_eq(leak_detected(mark), 1)
+    assert_eq(leak_assert_clear(mark), 0)
+
+    let report = leak_report_json(mark)
+    assert(str_contains(report, "\"mark_bytes\":0"))
+    assert(str_contains(report, "\"live_bytes\":64"))
+    assert(str_contains(report, "\"leaked_bytes\":64"))
+    assert(str_contains(report, "\"leak_detected\":1"))
+
+    assert_eq(alloc_track_free(64), 0)
+    assert_eq(leak_bytes_since(mark), 0)
+    assert_eq(leak_assert_clear(mark), 1)
+}
+
+fn TestLeakMarkIgnoresLowerLiveBytes() {
+    let _ = alloc_track_reset()
+    assert_eq(alloc_track_alloc(80), 80)
+    let mark = leak_mark()
+    assert_eq(alloc_track_free(50), 30)
+    assert_eq(leak_bytes_since(mark), 0)
+    assert_eq(leak_detected(mark), 0)
+}

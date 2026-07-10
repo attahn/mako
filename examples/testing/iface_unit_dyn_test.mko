@@ -1,0 +1,17 @@
+interface Writer {
+    fn write(string) -> int
+}
+
+fn Writer_write(s: string) -> int {
+    return str_len(s)
+}
+
+fn use_writer(w: Writer, msg: string) -> int {
+    return w.write(msg)
+}
+
+fn TestIfaceUnitDyn() {
+    let w: Writer = 0
+    assert_eq(w.write("hi"), 2)
+    assert_eq(use_writer(0, "yo"), 2)
+}

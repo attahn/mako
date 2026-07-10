@@ -1,0 +1,11 @@
+fn TestPbVarint() {
+    let e = pb_encode_varint(300)
+    // 300 = 0xAC 0x02
+    assert_eq(pb_varint_len(e), 2)
+    assert_eq(pb_decode_varint(e), 300)
+    let e0 = pb_encode_varint(0)
+    assert_eq(pb_varint_len(e0), 1)
+    assert_eq(pb_decode_varint(e0), 0)
+    let e1 = pb_encode_varint(1)
+    assert_eq(pb_decode_varint(e1), 1)
+}

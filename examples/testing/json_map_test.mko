@@ -1,0 +1,10 @@
+fn TestJsonMap() {
+    let more = json_array_push_string(json_array_strings2("a", "b"), "c")
+    assert_eq(json_array_len(more), 3)
+    assert_eq(str_len(json_array_get_string(more, 2)), 1)
+
+    let mut m = make(map[string]string, 4)
+    m["k"] = "v"
+    let obj = json_object_from_map_ss(m)
+    assert_eq_str(json_get_string(obj, "k"), "v")
+}

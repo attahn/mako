@@ -1,0 +1,16 @@
+// Nested always-break: inner move does not poison outer hold (CFG: no re-entry).
+fn consume(t: string) {}
+
+fn main() {
+    hold let outer = "o"
+    let mut i = 0
+    while i < 2 {
+        i = i + 1
+        hold let inner = "i"
+        while true {
+            consume(inner)
+            break
+        }
+    }
+    print(outer)
+}

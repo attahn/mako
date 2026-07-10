@@ -1,0 +1,19 @@
+// Small string stdlib for backends
+fn main() {
+    let name = "mako"
+    let msg = "hello " + name
+    print(msg)
+    print_int(str_len(msg))
+    print(int_to_string(99))
+
+    if str_contains(msg, "mako") {
+        print("contains mako")
+    }
+
+    if str_eq(name, "mako") {
+        print("name ok")
+    }
+
+    let xs = [10, 20, 30]
+    print_int(len(xs))
+}

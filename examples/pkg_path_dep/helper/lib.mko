@@ -1,0 +1,7 @@
+fn add(a: int, b: int) -> int {
+    return core.scale(a) + b
+}
+
+fn greet(name: string) -> string {
+    return "hi " + name
+}

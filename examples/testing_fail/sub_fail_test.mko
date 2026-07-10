@@ -1,0 +1,8 @@
+fn TestSubsFail() {
+    t_run("good")
+    assert_eq(1, 1)
+    t_run("bad")
+    assert_eq(1, 2)
+    t_run("after")
+    assert_eq(3, 3)
+}

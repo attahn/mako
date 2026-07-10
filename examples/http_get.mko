@@ -1,0 +1,8 @@
+// Plain HTTP GET client (non-TLS). Unreachable port → empty body.
+
+fn main() {
+    let bad = http_get("ftp://nope")
+    print_int(str_len(bad))
+    let miss = http_get("http://127.0.0.1:1/")
+    print_int(str_len(miss))
+}

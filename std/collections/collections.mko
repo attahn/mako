@@ -1,0 +1,6 @@
+fn sort_i(a: []int) -> []int { return sort_ints(a) }
+fn sort_s(a: []string) -> []string { return sort_strings(a) }
+fn has_int(a: []int, v: int) -> bool { return ints_contains(a, v) }
+fn has_str(a: []string, v: string) -> bool { return strings_contains(a, v) }
+fn copy_ints(a: []int) -> []int { return ints_copy(a) }
+fn index_of(a: []int, v: int) -> int { return ints_index(a, v) }

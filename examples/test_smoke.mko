@@ -1,0 +1,7 @@
+// Smoke test discovered by `mako test`
+
+fn main() {
+    assert(1 == 1)
+    let r = Ok(3)
+    print_int(result_unwrap_or(r, 0))
+}

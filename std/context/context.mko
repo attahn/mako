@@ -1,0 +1,3 @@
+fn with_timeout(ms: int) -> int { return context_with_timeout(ms) }
+fn expired(deadline: int) -> int { return context_expired(deadline) }
+fn remaining(deadline: int) -> int { return context_remaining(deadline) }

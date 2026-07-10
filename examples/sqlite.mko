@@ -1,0 +1,12 @@
+// SQLite seed — real libsqlite3
+
+fn main() {
+    let db = "/tmp/mako_demo.sqlite"
+    let _ = sqlite_query_int(db, "create table if not exists t(x integer)")
+    let _ = sqlite_query_int(db, "delete from t")
+    let _ = sqlite_query_int(db, "insert into t(x) values (42)")
+    let n = sqlite_query_int(db, "select x from t limit 1")
+    print_int(n)
+    let s = sqlite_query_text(db, "select 'hello-sqlite'")
+    print(s)
+}

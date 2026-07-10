@@ -1,0 +1,73 @@
+fn TestZipMultiFile() {
+    let z = zip_create()
+    assert_eq(zip_add(z, "a.txt", "aaa"), 0)
+    assert_eq(zip_add(z, "b.txt", "bbbbbbbbbbbbbbbbbbbbbbbb"), 0)
+    let path = "/tmp/mako_zip_multi_w5.zip"
+    assert_eq(zip_write_to(z, path), 0)
+    zip_close(z)
+    let names = zip_list(path)
+    assert_eq(len(names), 2)
+    assert_eq_str(zip_read_file(path, "a.txt"), "aaa")
+    assert_eq_str(zip_read_file(path, "b.txt"), "bbbbbbbbbbbbbbbbbbbbbbbb")
+    let _ = remove_file(path)
+}
+
+fn TestHtmlTemplateRich() {
+    let t = html_template_execute2("{{a}}-{{b}}", "a", "<x>", "b", "y")
+    assert(str_contains(t, "&lt;x&gt;"))
+    assert(str_contains(t, "y"))
+    let t2 = html_template_if("pre{{if show}}HELLO{{end}}post", "show", 1, "")
+    assert(str_contains(t2, "HELLO"))
+    let t3 = html_template_if("pre{{if show}}HELLO{{end}}post", "show", 0, "")
+    assert(not str_contains(t3, "HELLO"))
+}
+
+fn TestGobMapBinary() {
+    let mut m = make(map[string]string, 2)
+    m["k"] = "v"
+    m["x"] = "y"
+    let enc = gob_encode_map_ss(m)
+    let d = gob_decode_map_ss(enc)
+    assert_eq_str(d["k"], "v")
+    assert_eq_str(d["x"], "y")
+    let b = binary_put_u32le(67305985)
+    assert_eq(binary_u32le(b), 67305985)
+    let b2 = binary_put_u16le(513)
+    assert_eq(binary_u16le(b2), 513)
+    let b3 = binary_put_u64le(578437695752307201)
+    assert_eq(binary_u64le(b3), 578437695752307201)
+}
+
+fn TestSmtpAndReflectValue() {
+    let msg = smtp_format_message("a@b.com", "c@d.com", "Hi", "body")
+    assert(str_contains(msg, "Subject: Hi"))
+    assert(str_contains(msg, "body"))
+    // soft send to closed port — expect failure (-1), must not crash
+    assert_eq(smtp_send_soft("127.0.0.1", 1, msg), -1)
+    let rv = reflect_value_new("Name:string,Age:int")
+    assert_eq(reflect_value_num_fields(rv), 2)
+    assert_eq(reflect_value_set(rv, "Name", "Ada"), 0)
+    assert_eq_str(reflect_value_get(rv, "Name"), "Ada")
+}
+
+fn TestRegexpRe2Wave5() {
+    assert(regex_match("a{2}", "aa"))
+    assert(regex_match("a{2,4}", "aaa"))
+    assert(not regex_match("a{2,4}", "a"))
+    assert_eq_str(regex_find("\\bcat\\b", "a cat b"), "cat")
+    assert_eq_str(regex_find("\\bcat\\b", "catch"), "")
+    assert(regex_match("\\Ahi\\z", "hi"))
+}
+
+fn TestJpegDctGifLzw() {
+    let gray = "ABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGH"
+    // 8x8
+    let j = jpeg_encode_gray_dct(8, 8, gray)
+    assert(len(j) > 20)
+    assert_eq_str(jpeg_decode_gray(j), gray)
+    let _ = jpeg_dct_dc(j)
+    let px = "ABCDEF" // 2x1
+    let g = gif_encode_rgb_lzw(2, 1, px)
+    assert(len(g) > 10)
+    assert_eq(gif_width(g), 2)
+}

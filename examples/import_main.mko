@@ -1,0 +1,6 @@
+import "./import_lib.mko"
+
+fn main() {
+    print_int(lib_add(2, 3))
+    print(lib_greet("mako"))
+}

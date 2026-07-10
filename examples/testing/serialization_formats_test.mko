@@ -1,0 +1,18 @@
+fn TestYamlTomlSeeds() {
+    let y = "name: Ada\ncity: Paris\n"
+    assert_eq_str(yaml_get_string(y, "name"), "Ada")
+    assert_eq_str(yaml_get_string(y, "city"), "Paris")
+    assert_eq_str(yaml_get_string(y, "missing"), "")
+
+    let t = "name = \"Grace\"\nport = 8080\n"
+    assert_eq_str(toml_get_string(t, "name"), "Grace")
+    assert_eq(toml_get_int(t, "port"), 8080)
+}
+
+fn TestBinaryFormatSeeds() {
+    assert_eq_str(msgpack_int_hex(42), "d3000000000000002a")
+    assert_eq_str(cbor_int_hex(42), "1b000000000000002a")
+    assert_eq_str(cbor_int_hex(-1), "3b0000000000000000")
+    assert_eq_str(avro_long_hex(64), "8001")
+    assert_eq_str(avro_long_hex(-1), "01")
+}

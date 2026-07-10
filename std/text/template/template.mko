@@ -1,0 +1,1 @@
+fn execute(tmpl: string, key: string, val: string) -> string { return template_execute(tmpl, key, val) }

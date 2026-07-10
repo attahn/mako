@@ -1,0 +1,36 @@
+// Go-like maps — open-addressing hash tables in the runtime.
+
+fn main() {
+    let mut m = make(map[string]int)
+    m["a"] = 1
+    m["b"] = 2
+    print_int(m["a"])
+    print_int(len(m))
+    if has(m, "a") {
+        print("has_a")
+    }
+    delete(m, "a")
+    print_int(len(m))
+    print_int(m["a"]) // missing → 0 (Go zero value)
+
+    let mut n = 0
+    for k, v in range m {
+        n = n + v
+        print(k)
+    }
+    print_int(n)
+
+    let mut mi = make(map[int]int)
+    mi[10] = 100
+    mi[20] = 200
+    print_int(mi[10])
+    delete(mi, 10)
+    print_int(mi[10])
+
+    let mut ms = make(map[string]string)
+    ms["x"] = "hello"
+    print(ms["x"])
+    if has(ms, "x") {
+        print("has_x")
+    }
+}

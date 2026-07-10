@@ -1,0 +1,11 @@
+// Must fail: `break` after move — every exit path moved `s`.
+fn consume(t: string) {}
+
+fn main() {
+    hold let s = "hi"
+    while true {
+        consume(s)
+        break
+    }
+    print(s)
+}

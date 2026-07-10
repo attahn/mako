@@ -1,0 +1,41 @@
+// Exhaustive match on Result, Option, and user enums
+
+enum Shape {
+    Circle(int),
+    Rect(int, int),
+    Point,
+}
+
+fn describe(s: Shape) -> int {
+    match s {
+        Circle(r) => r * r,
+        Rect(w, h) => w * h,
+        Point => 0,
+    }
+}
+
+fn unwrap_or_zero(r: Result[int, string]) -> int {
+    match r {
+        Ok(v) => v,
+        Err(e) => 0,
+    }
+}
+
+fn option_or(o: Option[int], fallback: int) -> int {
+    match o {
+        Some(v) => v,
+        None => fallback,
+    }
+}
+
+fn main() {
+    print_int(describe(Circle(5)))
+    print_int(describe(Rect(3, 4)))
+    print_int(describe(Point))
+
+    print_int(unwrap_or_zero(Ok(42)))
+    print_int(unwrap_or_zero(Err("nope")))
+
+    print_int(option_or(Some(7), -1))
+    print_int(option_or(None, -1))
+}

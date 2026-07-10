@@ -1,0 +1,15 @@
+fn format_message(from: string, to: string, subject: string, body: string) -> string {
+    return smtp_format_message(from, to, subject, body)
+}
+fn send_soft(host: string, port: int, msg: string) -> int { return smtp_send_soft(host, port, msg) }
+fn send_dialog(host: string, port: int, from: string, to: string, msg: string) -> int {
+    return smtp_send_dialog(host, port, from, to, msg)
+}
+fn auth_plain(user: string, pass: string) -> string { return smtp_auth_plain(user, pass) }
+fn send_auth(host: string, port: int, user: string, pass: string, from: string, to: string, msg: string) -> int {
+    return smtp_send_auth(host, port, user, pass, from, to, msg)
+}
+fn starttls_available() -> int { return smtp_starttls_available() }
+fn send_starttls(host: string, port: int, user: string, pass: string, from: string, to: string, msg: string) -> int {
+    return smtp_send_starttls(host, port, user, pass, from, to, msg)
+}

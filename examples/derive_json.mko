@@ -1,0 +1,19 @@
+// #[derive(json)] roundtrip: to_json + field from_json extractors.
+
+#[derive(json)]
+struct Person {
+    name: string
+    age: int
+}
+
+fn main() {
+    let j = Person_to_json("Ada", 36)
+    print(j)
+    let name = Person_name_from_json(j)
+    let age = Person_age_from_json(j)
+    print(name)
+    print_int(age)
+    // Rebuild and compare
+    let j2 = Person_to_json(name, age)
+    print(j2)
+}

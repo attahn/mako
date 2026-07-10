@@ -1,0 +1,4 @@
+fn walk(root: string) -> []string { return filepath_walk(root) }
+fn walk_n(root: string, max_depth: int) -> []string { return filepath_walk_n(root, max_depth) }
+fn clean(p: string) -> string { return path_clean(p) }
+fn join_path(a: string, b: string) -> string { return path_join(a, b) }

@@ -1,0 +1,5 @@
+fn new(init: int) -> AtomicInt { return atomic_new(init) }
+fn load(p: AtomicInt) -> int { return atomic_load(p) }
+fn store(p: AtomicInt, v: int) { atomic_store(p, v) }
+fn add(p: AtomicInt, d: int) -> int { return atomic_add(p, d) }
+fn cas(p: AtomicInt, oldv: int, newv: int) -> int { return atomic_cas(p, oldv, newv) }

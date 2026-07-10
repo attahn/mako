@@ -1,0 +1,26 @@
+// First-class actor / receive — desugars to mailbox + crew loop.
+// Helpers: Session_spawn, Session_send, Session_Invite/Bye/Timer tags, Session_loop.
+
+actor Session {
+    receive Invite {
+        print("invite")
+    }
+    receive Timer {
+        print("tick")
+    }
+    receive Bye {
+        print("bye")
+    }
+}
+
+fn main() {
+    let session = Session_spawn()
+    crew t {
+        let loopj = t.kick(Session_loop(session))
+        let _ = Session_send(session, Session_Invite())
+        let _ = Session_send(session, Session_Timer())
+        let _ = Session_send(session, Session_Timer())
+        let _ = Session_send(session, Session_Bye())
+        print_int(loopj.join())
+    }
+}

@@ -1,0 +1,21 @@
+// Const-false if/while edges are pruned — moves on dead paths do not poison.
+fn consume(t: string) {}
+
+fn main() {
+    hold let s = "hi"
+    if false {
+        consume(s)
+    }
+    while false {
+        consume(s)
+    }
+    let mut i = 0
+    while i < 2 {
+        i = i + 1
+        if false {
+            consume(s)
+            continue
+        }
+    }
+    print(s)
+}

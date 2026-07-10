@@ -1,0 +1,6 @@
+fn main() {
+    print_int(argc())
+    let a = args()
+    print_int(len(a))
+    print(arg_get(0))
+}

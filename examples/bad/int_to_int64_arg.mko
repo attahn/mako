@@ -1,0 +1,9 @@
+// Must fail: cannot pass int where int64 is required
+fn needs64(n: int64) -> int64 {
+    return n
+}
+
+fn main() {
+    let a: int = 1
+    print_int64(needs64(a))
+}

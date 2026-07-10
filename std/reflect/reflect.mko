@@ -1,0 +1,24 @@
+fn type_of_int(v: int) -> string { return reflect_type_of_int(v) }
+fn type_of_string(v: string) -> string { return reflect_type_of_string(v) }
+fn kind_of_int(v: int) -> string { return reflect_kind_of_int(v) }
+fn kind_of_string(v: string) -> string { return reflect_kind_of_string(v) }
+fn value_string_int(v: int) -> string { return reflect_value_string_int(v) }
+fn value_string_str(v: string) -> string { return reflect_value_string_str(v) }
+fn len_string(v: string) -> int { return reflect_len_string(v) }
+fn struct_num_fields(schema: string) -> int { return reflect_struct_num_fields(schema) }
+fn struct_field_name(schema: string, idx: int) -> string { return reflect_struct_field_name(schema, idx) }
+fn struct_field_type(schema: string, idx: int) -> string { return reflect_struct_field_type(schema, idx) }
+fn struct_has_field(schema: string, name: string) -> int { return reflect_struct_has_field(schema, name) }
+fn value_new(schema: string) -> ReflectValue { return reflect_value_new(schema) }
+fn value_set(v: ReflectValue, field: string, val: string) -> int { return reflect_value_set(v, field, val) }
+fn value_get(v: ReflectValue, field: string) -> string { return reflect_value_get(v, field) }
+fn value_num_fields(v: ReflectValue) -> int { return reflect_value_num_fields(v) }
+fn value_field_at(v: ReflectValue, idx: int) -> string { return reflect_value_field_at(v, idx) }
+fn value_set_at(v: ReflectValue, idx: int, val: string) -> int { return reflect_value_set_at(v, idx, val) }
+fn value_schema(v: ReflectValue) -> string { return reflect_value_schema(v) }
+fn value_clone(v: ReflectValue) -> ReflectValue { return reflect_value_clone(v) }
+fn value_equal(a: ReflectValue, b: ReflectValue) -> int { return reflect_value_equal(a, b) }
+fn type_schema(name: string) -> string { return reflect_type_schema(name) }
+fn value_of_type(name: string) -> ReflectValue { return reflect_value_of_type(name) }
+fn type_count() -> int { return reflect_type_count() }
+fn type_name_at(idx: int) -> string { return reflect_type_name_at(idx) }

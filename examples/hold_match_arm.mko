@@ -1,0 +1,13 @@
+// Must succeed: match arms checked independently; only one arm runs.
+fn use_moved(s: string) -> int {
+    len(s)
+}
+
+fn main() {
+    hold let x = "hi"
+    let n = match 1 {
+        0 => use_moved(x)
+        _ => len(x)
+    }
+    print_int(n)
+}

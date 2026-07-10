@@ -1,0 +1,13 @@
+// Must fail: share live across nested if while mutating source in then-arm.
+fn main() {
+    let mut x = 1
+    let mut i = 0
+    while i < 2 {
+        share let s = share_int(x)
+        if i == 0 {
+            x = 2
+        }
+        print_int(share_get(s))
+        i = i + 1
+    }
+}

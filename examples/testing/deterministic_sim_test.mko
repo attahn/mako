@@ -1,0 +1,36 @@
+fn TestFixedPointMath() {
+    let scale = 1000
+    let a = fx_from_int(2, scale)
+    let b = fx_from_int(3, scale)
+
+    assert_eq(a, 2000)
+    assert_eq(fx_to_int(b, scale), 3)
+    assert_eq(fx_mul(a, b, scale), 6000)
+    assert_eq(fx_div(b, a, scale), 1500)
+    assert_eq(fx_mul(a, b, 0), 0)
+    assert_eq(fx_div(a, 0, scale), 0)
+}
+
+fn TestDeterministicRng() {
+    let a = det_rng_next(12345)
+    let b = det_rng_next(12345)
+    assert_eq(a, b)
+
+    let c = det_rng_next(a)
+    assert(c != a)
+
+    let r = det_rng_range(12345, 10)
+    assert(r >= 0 && r < 10)
+    assert_eq(det_rng_range(12345, 0), 0)
+}
+
+fn TestReplayStream() {
+    let s0 = ""
+    let s1 = replay_append(s0, 1, 42)
+    let s2 = replay_append(s1, 2, 99)
+    let s3 = replay_append(s2, 1, 77)
+
+    assert_eq(replay_input(s3, 2), 99)
+    assert_eq(replay_input(s3, 1), 77)
+    assert_eq(replay_input(s3, 3), 0)
+}

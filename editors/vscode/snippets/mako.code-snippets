@@ -1,0 +1,48 @@
+{
+  "main function": {
+    "prefix": "main",
+    "body": [
+      "fn main() {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a Mako main function"
+  },
+  "test function": {
+    "prefix": "test",
+    "body": [
+      "fn Test${1:Name}() {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a Mako test function"
+  },
+  "crew block": {
+    "prefix": "crew",
+    "body": [
+      "crew ${1:t} {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a structured concurrency crew block"
+  },
+  "arena block": {
+    "prefix": "arena",
+    "body": [
+      "arena ${1:a} {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create an arena allocation block"
+  },
+  "http route": {
+    "prefix": "route",
+    "body": [
+      "if http_route_match(${1:req}, \"${2:GET}\", \"${3:/path/{id}}\") {",
+      "    let ${4:id} = http_route_param(${1:req}, \"${3:/path/{id}}\", \"${4:id}\")",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a Mako HTTP route match"
+  }
+}

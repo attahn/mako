@@ -1,0 +1,12 @@
+// Book sample — hello + fib (ch02)
+fn main() {
+    print("hello from mako")
+    print_int(fib(10))
+}
+
+fn fib(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}

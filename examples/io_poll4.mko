@@ -1,0 +1,42 @@
+// Deeper colorless poll: 4 listen fds via io_poll4 (select underneath).
+
+fn connect_c() -> int {
+    sleep_ms(30)
+    let c = tcp_connect("127.0.0.1", 18113)
+    let _ = tcp_close(c)
+    return 0
+}
+
+fn main() {
+    let a = tcp_listen(18111)
+    let b = tcp_listen(18112)
+    let c = tcp_listen(18113)
+    let d = tcp_listen(18114)
+    if a < 0 {
+        print("listen failed")
+        return
+    }
+
+    let idle = io_poll4(a, b, c, d, 40)
+    print_int(idle)
+
+    crew t {
+        let _ = t.kick(connect_c())
+        let which = io_poll4(a, b, c, d, 500)
+        print_int(which)
+        if which == 2 {
+            let client = tcp_accept_nb(c)
+            let _ = tcp_close(client)
+            print("ready c")
+        }
+        if which < 0 {
+            print("poll timeout")
+        }
+    }
+
+    let _ = tcp_close(a)
+    let _ = tcp_close(b)
+    let _ = tcp_close(c)
+    let _ = tcp_close(d)
+    print("io_poll4 done")
+}

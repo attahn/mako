@@ -1,0 +1,6 @@
+fn TestCliArgs() {
+    assert(argc() >= 1)
+    let a = args()
+    assert(len(a) >= 1)
+    assert(str_len(arg_get(0)) > 0)
+}

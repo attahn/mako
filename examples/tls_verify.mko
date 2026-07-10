@@ -1,0 +1,12 @@
+// TLS client with cert verify (trust runtime/certs/dev.crt as CA)
+// Host must be "localhost" to match cert CN.
+
+fn main() {
+    let body = tls_get("localhost", 18445, "/", "runtime/certs/dev.crt")
+    print(body)
+    if str_contains(body, "tls-ok") {
+        print("tls verify ok")
+    } else {
+        print("tls verify miss")
+    }
+}

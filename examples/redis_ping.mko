@@ -1,0 +1,16 @@
+// Redis RESP PING: mock server (real wire format) + redis_ping client.
+// Prefer live redis-server when present; this example always uses the mock.
+
+fn serve() -> int {
+    return redis_mock_once(16379)
+}
+
+fn main() {
+    crew t {
+        let s = t.kick(serve())
+        sleep_ms(40)
+        let r = redis_ping("127.0.0.1", 16379)
+        print(r)
+        let _ = s.join()
+    }
+}

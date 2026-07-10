@@ -1,0 +1,12 @@
+// Share in loop body ends each iteration — re-borrow next iter OK; mut after loop OK.
+fn main() {
+    let mut x = 1
+    let mut i = 0
+    while i < 2 {
+        share let s = share_int(x)
+        print_int(share_get(s))
+        i = i + 1
+    }
+    x = 2
+    print_int(x)
+}

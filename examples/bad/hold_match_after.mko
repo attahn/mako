@@ -1,0 +1,14 @@
+// Must fail: match may move on an arm → use after match is use-after-move.
+fn use_moved(s: string) -> int {
+    len(s)
+}
+
+fn main() {
+    hold let x = "hi"
+    let n = match 1 {
+        0 => len(x)
+        _ => use_moved(x)
+    }
+    print(x)
+    print_int(n)
+}

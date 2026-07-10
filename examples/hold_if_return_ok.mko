@@ -1,0 +1,11 @@
+// Diverging `then` does not move `s` for the fall-through path after the if.
+fn consume(x: string) {}
+
+fn main() {
+    hold let s = "hi"
+    if false {
+        consume(s)
+        return
+    }
+    print(s)
+}

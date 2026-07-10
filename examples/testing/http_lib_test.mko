@@ -1,0 +1,19 @@
+// Client-side HTTP library tests (no live server required for status=0 on miss).
+// Live roundtrip: ./scripts/http-lib-smoke.sh
+
+fn TestHttpClientEmptyOnBadScheme() {
+    let body = http_get("https://example.com/")
+    assert_eq_str(body, "")
+    assert_eq(http_last_status(), 0)
+}
+
+fn TestHttpRequestSignature() {
+    // Unreachable host → empty body, status stays 0
+    let body = http_request("GET", "http://127.0.0.1:1/", "", 50)
+    assert_eq_str(body, "")
+}
+
+fn TestHttpPostTimeoutSignature() {
+    let body = http_post_timeout("http://127.0.0.1:1/", "x", 50)
+    assert_eq_str(body, "")
+}

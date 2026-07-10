@@ -1,0 +1,7 @@
+fn main() {
+    let mut x = 1
+    share let a = share_int(x)
+    share let b = share_int(x)
+    share_drop(a)
+    share_drop(b)
+}

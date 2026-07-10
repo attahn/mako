@@ -1,0 +1,21 @@
+fn TestCookieGetMake() {
+    let header = "theme=dark; sid=abc123; csrf=tok"
+    assert_eq_str(cookie_get(header, "sid"), "abc123")
+    assert_eq_str(cookie_get(header, "missing"), "")
+
+    let set = cookie_make("sid", "abc123", 3600)
+    assert(str_contains(set, "sid=abc123"))
+    assert(str_contains(set, "HttpOnly"))
+    assert(str_contains(set, "SameSite=Lax"))
+    assert(str_contains(set, "Path=/"))
+}
+
+fn TestSessionAndCsrf() {
+    let sid = session_id_new()
+    assert_eq(str_len(sid), 32)
+
+    let token = csrf_token()
+    assert_eq(str_len(token), 32)
+    assert_eq(csrf_check(token, token), 1)
+    assert_eq(csrf_check(token, "wrong"), 0)
+}

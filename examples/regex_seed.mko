@@ -1,0 +1,6 @@
+fn main() {
+    if regex_match("[^0-9]+", "hi") { print_int(1) } else { print_int(0) }
+    if regex_match("(ab)+c", "ababc") { print_int(1) } else { print_int(0) }
+    if regex_match("a(b|c)d", "acd") { print_int(1) } else { print_int(0) }
+    print(regex_find("cat|dog", "xxcatyy"))
+}

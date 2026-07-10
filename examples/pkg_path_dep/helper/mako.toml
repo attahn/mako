@@ -1,0 +1,5 @@
+name = "helper"
+version = "0.1.0"
+
+[dependencies]
+"core" = { path = "../core", version = "0.1.0" }

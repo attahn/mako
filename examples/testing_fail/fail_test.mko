@@ -1,0 +1,11 @@
+fn always() -> int {
+    return 1
+}
+
+fn TestFailDemo() {
+    assert_eq(always(), 2)
+}
+
+fn TestStillRuns() {
+    assert(1 == 1)
+}

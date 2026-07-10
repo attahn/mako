@@ -1,0 +1,107 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Mako",
+  "scopeName": "source.mako",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#functions"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.mako",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.mako",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.mako",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.mako",
+              "match": "\\\\[ntr\\\\\"]"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.mako",
+          "match": "\\b[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.mako",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.mako",
+          "match": "\\b(if|else|while|for|in|range|break|continue|return|defer|match|select|timeout|default)\\b"
+        },
+        {
+          "name": "keyword.declaration.mako",
+          "match": "\\b(fn|let|mut|struct|enum|actor|receive|interface|extern|const|import|as)\\b"
+        },
+        {
+          "name": "keyword.operator.word.mako",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "keyword.other.mako",
+          "match": "\\b(crew|kick|join|fan|arena|hold|share|unsafe)\\b"
+        },
+        {
+          "name": "constant.language.boolean.mako",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.mako",
+          "match": "\\b(int|int64|int32|int8|uint64|byte|float|bool|string|void|Result|Option|Job|Crew|HttpRequest)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.mako",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()"
+        }
+      ]
+    }
+  }
+}

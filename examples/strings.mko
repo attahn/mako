@@ -1,0 +1,83 @@
+// String basics — Go-inspired: len/index/slice are bytes; `range` yields runes.
+
+fn greet(name: string) -> string {
+    return "hello, " + name
+}
+
+fn main() {
+    // Literals + escapes
+    let s = "hi\tthere\n"
+    print_int(len(s))
+    print(s)
+
+    // Concat
+    let t = "ma" + "ko"
+    print(t)
+    print(greet("world"))
+
+    // Compare (== / != only; no string ordering)
+    if t == "mako" {
+        print("eq")
+    }
+    if t != "go" {
+        print("ne")
+    }
+
+    // len = byte length; rune_count = Unicode code points
+    let u = "café"
+    print_int(len(u))
+    print_int(rune_count(u))
+    print_int(str_len(u))
+
+    // Index → byte (0..255); convert to int to print
+    let hello = "hello"
+    print_int(int(hello[0]))
+    print_int(int(hello[1]))
+
+    // Slice by bytes → string
+    print(hello[1:4])
+    print(hello[:2])
+    print(hello[3:])
+    print(hello[:])
+
+    // Empty
+    let empty = ""
+    print_int(len(empty))
+    if empty == "" {
+        print("empty")
+    }
+
+    // Helpers
+    if str_eq("x", "x") {
+        print("seq")
+    }
+    if str_contains("hello", "ell") {
+        print("has")
+    }
+
+    // Conversions
+    let b = []byte("Hi!")
+    print(string(b))
+    let b2 = bytes("ab")
+    print_int(int(b2[0]))
+    print(string(42))
+
+    // Range over string = runes (Go-like); index is byte offset
+    for i, r in range "ab" {
+        print_int(i)
+        print_int(r)
+    }
+    for _, r in range "café" {
+        print_int(r)
+    }
+
+    // while over bytes + break
+    let mut i = 0
+    while i < len(hello) {
+        if i == 2 {
+            break
+        }
+        print_int(int(hello[i]))
+        i = i + 1
+    }
+}

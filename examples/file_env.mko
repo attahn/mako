@@ -1,0 +1,9 @@
+fn main() {
+    let path = "/tmp/mako_file_env_test.txt"
+    let _ = write_file(path, "hello")
+    let s = read_file(path)
+    print(s)
+    let _ = env_set("MAKO_TEST_ENV", "42")
+    let v = env_get("MAKO_TEST_ENV")
+    print(v)
+}

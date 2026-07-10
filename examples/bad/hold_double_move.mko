@@ -1,0 +1,8 @@
+// Must fail: double-move of the same non-Copy hold binding.
+fn main() {
+    hold let x = "hi"
+    hold let y = x
+    hold let z = x
+    print(y)
+    print(z)
+}

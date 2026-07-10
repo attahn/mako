@@ -1,0 +1,22 @@
+// HTTPS max-N demo (OpenSSL when linked) — `/health` JSON, else fixed body.
+// Build: mako build examples/https_server.mko -o out/https_server
+// Run:   out/https_server            # serves 3 requests then exits
+// Curl:  curl -sk https://127.0.0.1:18443/health
+// Smoke: ./scripts/https-server-smoke.sh  (skips if OpenSSL not linked)
+// Certs: runtime/certs/dev.crt + dev.key (self-signed, CN=localhost)
+// Not a full HTTPS framework — Partial seed.
+
+fn main() {
+    let code = tls_serve_n(
+        18443,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "hello from mako https\n",
+        3
+    )
+    if code != 0 {
+        print("tls_serve_n failed (OpenSSL missing or bind error)")
+        return
+    }
+    print("https_server done")
+}

@@ -1,0 +1,5 @@
+// Must fail: append element type mismatch
+fn main() {
+    let mut s = [1, 2, 3]
+    s = append(s, "nope")
+}

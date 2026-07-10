@@ -1,0 +1,9 @@
+fn reader(path: string) -> BufReader { return buf_reader_new(path) }
+fn reader_string(s: string) -> BufReader { return buf_reader_from_string(s) }
+fn read_line(r: BufReader) -> string { return buf_read_line(r) }
+fn read(r: BufReader, n: int) -> string { return buf_read(r, n) }
+fn reader_close(r: BufReader) -> int { return buf_reader_close(r) }
+fn writer(path: string) -> BufWriter { return buf_writer_new(path) }
+fn write(w: BufWriter, s: string) -> int { return buf_write(w, s) }
+fn flush(w: BufWriter) -> int { return buf_flush(w) }
+fn writer_close(w: BufWriter) -> int { return buf_writer_close(w) }

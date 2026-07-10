@@ -1,0 +1,11 @@
+fn main() {
+    match parse_int("42") {
+        Ok(v) => print_int(v),
+        Err(_) => print_int(-1),
+    }
+    match parse_int("nope") {
+        Ok(_) => print_int(0),
+        Err(_) => print_int(1),
+    }
+    print_float(parse_float("3.5"))
+}

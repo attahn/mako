@@ -1,0 +1,26 @@
+fn TestGraphqlFieldAndArgs() {
+    let q = "query GetUser { user(id: \"42\", active: true) { id name } }"
+    assert_eq_str(graphql_field(q), "user")
+    assert_eq_str(graphql_arg(q, "id"), "42")
+    assert_eq_str(graphql_arg(q, "active"), "true")
+    assert_eq(graphql_is_mutation(q), 0)
+    assert_eq(graphql_is_mutation("mutation Save { saveUser(id: 1) { ok } }"), 1)
+}
+
+fn TestGraphqlResponsesAndRequest() {
+    let data = graphql_data("health", "{\"ok\":true}")
+    assert_eq_str(data, "{\"data\":{\"health\":{\"ok\":true}}}")
+
+    let err = graphql_error("bad \"field\"")
+    assert(str_contains(err, "\"errors\""))
+    assert(str_contains(err, "bad \\\"field\\\""))
+
+    let req = graphql_request("{ health }")
+    assert_eq_str(req, "{\"query\":\"{ health }\"}")
+}
+
+fn TestGraphqlMissingValues() {
+    assert_eq_str(graphql_field(""), "")
+    assert_eq_str(graphql_field("query Name"), "")
+    assert_eq_str(graphql_arg("{ user }", "id"), "")
+}

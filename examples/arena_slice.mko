@@ -1,0 +1,15 @@
+// Arena-backed make([]T) — storage from arena, freed with arena
+
+fn main() {
+    arena a {
+        let mut s = make([]int, 3, 8)
+        s[0] = 10
+        s[1] = 20
+        print_int(len(s))
+        print_int(s[0])
+        let mut b = make([]byte, 2)
+        b[0] = byte(65)
+        print_int(int(b[0]))
+    }
+    print("freed")
+}

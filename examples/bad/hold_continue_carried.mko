@@ -1,0 +1,17 @@
+// Must fail: move on `continue` path is loop-carried — next iter / post-loop
+// must treat `s` as moved (if-join alone would drop the continue-arm move).
+fn consume(t: string) {}
+
+fn main() {
+    hold let s = "hi"
+    let mut i = 0
+    while i < 3 {
+        i = i + 1
+        if i < 3 {
+            consume(s)
+            continue
+        }
+        break
+    }
+    print(s)
+}

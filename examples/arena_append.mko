@@ -1,0 +1,17 @@
+// Arena-backed append growth for []Struct
+
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    arena a {
+        let mut xs = make([]Point, 0, 1)
+        xs = append(xs, Point { x: 1, y: 2 })
+        xs = append(xs, Point { x: 3, y: 4 })
+        xs = append(xs, Point { x: 5, y: 6 })
+        print_int(len(xs))
+        print_int(xs[2].x)
+    }
+}

@@ -1,0 +1,31 @@
+fn TestRuntimeStatsChannels() {
+    runtime_stats_reset()
+    let empty = runtime_stats_json()
+    assert_eq(json_get_int(empty, "channels_created"), 0)
+    assert_eq(json_get_int(empty, "channel_sends"), 0)
+    assert_eq(json_get_int(empty, "channel_peak_depth"), 0)
+
+    let ch = chan_new(2)
+    assert_eq(chan_try_send(ch, 10), 1)
+    assert_eq(chan_try_send(ch, 20), 1)
+    assert_eq(chan_try_send(ch, 30), 0)
+    assert_eq(ch.recv(), 10)
+
+    let stats = runtime_stats_json()
+    assert_eq(json_get_int(stats, "channels_created"), 1)
+    assert_eq(json_get_int(stats, "channel_sends"), 2)
+    assert_eq(json_get_int(stats, "channel_try_send_drops"), 1)
+    assert_eq(json_get_int(stats, "channel_recvs"), 1)
+    assert_eq(json_get_int(stats, "channel_peak_depth"), 2)
+}
+
+fn TestRuntimeStatsSelectTimeout() {
+    runtime_stats_reset()
+    let a = chan_new(1)
+    let b = chan_new(1)
+    assert_eq(chan_select2(a, b, 0), -1)
+
+    let stats = runtime_stats_json()
+    assert_eq(json_get_int(stats, "channels_created"), 2)
+    assert_eq(json_get_int(stats, "channel_select_timeouts"), 1)
+}

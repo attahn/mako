@@ -1,0 +1,10 @@
+// Growable string builder
+
+fn main() {
+    let mut b = str_builder()
+    builder_write(b, "ma")
+    builder_write(b, "ko")
+    builder_write_byte(b, byte(33)) // '!'
+    print_int(builder_len(b))
+    print(builder_string(b))
+}

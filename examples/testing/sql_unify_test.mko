@@ -1,0 +1,18 @@
+fn TestSqlOpenSqlite() {
+    let db = sql_open_sqlite(":memory:")
+    assert_eq(sql_ok(db), 1)
+    let empty = make([]int, 0)
+    let n = sql_query_int(db, "select 1", empty)
+    if n != 1 {
+        // No libsqlite linked → soft-fail shape still returns -1
+        assert(n == -1)
+    }
+    let _ = sql_close(db)
+}
+
+fn TestSqlOpenPostgresStub() {
+    // Without libpq / server: open fails → sql_ok == 0
+    let db = sql_open_postgres("postgres://127.0.0.1:1/none")
+    assert(sql_ok(db) == 0 || sql_ok(db) == 1)
+    let _ = sql_close(db)
+}

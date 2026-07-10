@@ -1,0 +1,19 @@
+fn TestErrorWrap() {
+    let r = error("ENOENT")
+    let w = wrap_err(r, "open")
+    assert(error_is(w, "ENOENT"))
+    assert(error_is(w, "open"))
+    let s = error_string(w)
+    assert(str_contains(s, "open: "))
+}
+
+fn TestErrorf() {
+    let r = errorf("missing %s", "config.toml")
+    assert(error_is(r, "config.toml"))
+    assert(error_is(r, "missing"))
+}
+
+fn TestDbg() {
+    let x = dbg(3)
+    assert_eq(x, 3)
+}

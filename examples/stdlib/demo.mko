@@ -1,0 +1,9 @@
+// Stdlib smoke demo — strings, path, math, time, crypto helpers.
+fn main() {
+    let parts = str_split("a:b:c", ":")
+    print(str_join(parts, "/"))
+    print(path_clean("/x/../y/./z"))
+    print(format_int(abs(-99)))
+    print(time_format(now_ms()))
+    print(hex_encode("ok"))
+}

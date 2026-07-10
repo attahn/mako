@@ -1,0 +1,60 @@
+fn TestRangeIndexValue() {
+    let s = [10, 20, 30]
+    let mut sum = 0
+    let mut isum = 0
+    for i, v in range s {
+        isum = isum + i
+        sum = sum + v
+    }
+    assert_eq(isum, 3)
+    assert_eq(sum, 60)
+}
+
+fn TestRangeIndexOnly() {
+    let s = [1, 2, 3]
+    let mut n = 0
+    for i in range s {
+        n = n + i
+    }
+    assert_eq(n, 3)
+}
+
+fn TestRangeValueOnly() {
+    let s = [5, 7]
+    let mut sum = 0
+    for _, v in range s {
+        sum = sum + v
+    }
+    assert_eq(sum, 12)
+}
+
+fn TestRangeInt() {
+    let mut n = 0
+    for i in range 4 {
+        n = n + i
+    }
+    assert_eq(n, 6)
+}
+
+fn TestRangeBytes() {
+    let b: []byte = [1, 2, 3]
+    let mut sum = 0
+    for _, v in range b {
+        sum = sum + int(v)
+    }
+    assert_eq(sum, 6)
+}
+
+fn TestLegacyFor() {
+    let s = [2, 4]
+    let mut sum = 0
+    for v in s {
+        sum = sum + v
+    }
+    assert_eq(sum, 6)
+    let mut n = 0
+    for i in 3 {
+        n = n + i
+    }
+    assert_eq(n, 3)
+}

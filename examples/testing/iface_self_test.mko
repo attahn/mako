@@ -1,0 +1,17 @@
+struct Counter {
+    n: int
+}
+
+interface Adder {
+    fn add(int) -> int
+}
+
+fn Adder_add(self: Counter, delta: int) -> int {
+    return self.n + delta
+}
+
+fn TestIfaceSelf() {
+    let c = Counter { n: 10 }
+    assert_eq(c.add(5), 15)
+    assert_eq(Adder_add(c, 7), 17)
+}

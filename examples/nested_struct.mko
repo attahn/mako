@@ -1,0 +1,25 @@
+// Nested struct fields + nested literals + nested field assign
+
+struct Addr {
+    city: string
+    zip: int
+}
+
+struct Person {
+    name: string
+    addr: Addr
+}
+
+fn main() {
+    let mut p = Person {
+        name: "Ada",
+        addr: Addr { city: "Paris", zip: 75001 }
+    }
+    print(p.name)
+    print(p.addr.city)
+    print_int(p.addr.zip)
+    p.addr.city = "Lyon"
+    p.addr.zip = 69001
+    print(p.addr.city)
+    print_int(p.addr.zip)
+}

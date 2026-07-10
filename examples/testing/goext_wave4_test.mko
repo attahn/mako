@@ -1,0 +1,71 @@
+fn TestZipDeflateRoundtrip() {
+    let path = "/tmp/mako_zip_wave4.zip"
+    // compressible payload so deflate wins when zlib present
+    let data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    assert_eq(zip_write_file(path, "a.txt", data), 0)
+    assert_eq_str(zip_read_file(path, "a.txt"), data)
+    let _ = remove_file(path)
+    let _ = zip_deflate_available()
+}
+
+fn TestGifJpegRoundtrip() {
+    let px = "ABCDEF" // 2x1 RGB
+    let g = gif_encode_rgb(2, 1, px)
+    assert(len(g) > 10)
+    assert_eq(gif_width(g), 2)
+    assert_eq(gif_height(g), 1)
+    assert_eq_str(gif_decode_rgb(g), px)
+    let gray = "ABCD"
+    let j = jpeg_encode_gray(2, 2, gray)
+    assert(len(j) > 8)
+    assert_eq(jpeg_width(j), 2)
+    assert_eq(jpeg_height(j), 2)
+    assert_eq_str(jpeg_decode_gray(j), gray)
+}
+
+fn TestReflectStructSchema() {
+    let schema = "Name:string,Age:int,Ok:bool"
+    assert_eq(reflect_struct_num_fields(schema), 3)
+    assert_eq_str(reflect_struct_field_name(schema, 0), "Name")
+    assert_eq_str(reflect_struct_field_type(schema, 1), "int")
+    assert_eq(reflect_struct_has_field(schema, "Age"), 1)
+    assert_eq(reflect_struct_has_field(schema, "Nope"), 0)
+}
+
+fn TestHtmlTemplateEscape() {
+    let out = html_template_execute("<b>{{x}}</b>", "x", "<script>")
+    assert(str_contains(out, "&lt;script&gt;"))
+    assert(not str_contains(out, "<script>"))
+}
+
+fn TestGobCodec() {
+    let e = gob_encode_string("hello")
+    assert_eq_str(gob_decode_string(e), "hello")
+    let ei = gob_encode_int(-42)
+    assert_eq(gob_decode_int(ei), -42)
+}
+
+fn TestMailParse() {
+    assert_eq_str(mail_parse_address("Ada <ada@example.com>"), "ada@example.com")
+    assert_eq(mail_address_ok("ada@example.com"), 1)
+    assert_eq(mail_address_ok("not-an-email"), 0)
+    let msg = "From: a@b.com\r\nSubject: Hi\r\n\r\nbody"
+    assert_eq_str(mail_header_get(msg, "Subject"), "Hi")
+    assert_eq_str(mail_header_get(msg, "From"), "a@b.com")
+}
+
+fn TestSlogLevels() {
+    slog_set_level("warn")
+    slog_debug("hidden")
+    slog_warn("visible")
+    slog_with("error", "fail", "code", "1")
+    slog_set_level("debug")
+}
+
+fn TestRegexpRe2Extras() {
+    assert_eq(regex_valid("(a|b)"), 1)
+    assert_eq(regex_valid("(a"), 0)
+    assert(str_contains(regex_quote_meta("a.b"), "\\."))
+    assert(regex_match("[\\d]+", "42"))
+    assert(regex_match("[[:digit:]]+", "7"))
+}

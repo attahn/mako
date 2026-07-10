@@ -1,0 +1,10 @@
+// Must succeed: neither if-arm moves hold → still usable after join.
+fn main() {
+    hold let x = "hi"
+    if 0 == 1 {
+        print_int(1)
+    } else {
+        print_int(2)
+    }
+    print(x)
+}

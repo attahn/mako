@@ -1,0 +1,73 @@
+fn TestMapCommaOk() {
+    let mut m = make(map[string]int)
+    m["a"] = 7
+    let v, ok = m["a"]
+    assert(ok)
+    assert_eq(v, 7)
+    let v2, ok2 = m["missing"]
+    assert(not ok2)
+    assert_eq(v2, 0)
+}
+
+fn TestMapSSCommaOk() {
+    let mut m = make(map[string]string)
+    m["k"] = "v"
+    let s, ok = m["k"]
+    assert(ok)
+    assert_eq_str(s, "v")
+    let s2, ok2 = m["no"]
+    assert(not ok2)
+    assert_eq_str(s2, "")
+}
+
+fn TestMapSI() {
+    let mut m = make(map[string]int)
+    m["a"] = 1
+    m["b"] = 2
+    assert_eq(m["a"], 1)
+    assert_eq(len(m), 2)
+    assert(has(m, "a"))
+    delete(m, "a")
+    assert_eq(len(m), 1)
+    assert_eq(m["a"], 0)
+    assert(not has(m, "a"))
+}
+
+fn TestMapII() {
+    let mut m = make(map[int]int)
+    m[1] = 10
+    m[2] = 20
+    assert_eq(m[1], 10)
+    assert_eq(len(m), 2)
+    delete(m, 1)
+    assert_eq(m[1], 0)
+    assert_eq(len(m), 1)
+}
+
+fn TestMapSS() {
+    let mut m = make(map[string]string)
+    m["k"] = "v"
+    assert_eq_str(m["k"], "v")
+    assert(has(m, "k"))
+    delete(m, "k")
+    assert_eq_str(m["k"], "")
+}
+
+fn TestMapRange() {
+    let mut m = make(map[string]int)
+    m["x"] = 3
+    m["y"] = 4
+    let mut sum = 0
+    for _, v in range m {
+        sum = sum + v
+    }
+    assert_eq(sum, 7)
+}
+
+fn TestBuilder() {
+    let mut b = str_builder()
+    builder_write(b, "hi")
+    builder_write_byte(b, byte(33))
+    assert_eq(builder_len(b), 3)
+    assert_eq_str(builder_string(b), "hi!")
+}

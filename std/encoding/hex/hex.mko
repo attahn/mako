@@ -1,0 +1,2 @@
+fn encode(s: string) -> string { return hex_encode(s) }
+fn decode(s: string) -> string { return hex_decode(s) }

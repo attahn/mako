@@ -1,0 +1,50 @@
+// Colorless multi-fd poll: ordinary fns; select() underneath.
+// Two listeners; timeout when idle; which-fd when a client connects.
+
+fn connect_b() -> int {
+    sleep_ms(30)
+    let c = tcp_connect("127.0.0.1", 18102)
+    let _ = tcp_close(c)
+    return 0
+}
+
+fn main() {
+    let a = tcp_listen(18101)
+    let b = tcp_listen(18102)
+    if a < 0 {
+        print("listen a failed")
+        return
+    }
+    if b < 0 {
+        print("listen b failed")
+        return
+    }
+
+    // Nobody connects — expect timeout (-1)
+    let idle = io_poll2(a, b, 40)
+    print_int(idle)
+
+    crew t {
+        let _ = t.kick(connect_b())
+        // Wait up to 500ms for either listener
+        let which = io_poll2(a, b, 500)
+        print_int(which)
+        if which == 1 {
+            let client = tcp_accept_nb(b)
+            let _ = tcp_close(client)
+            print("ready b")
+        }
+        if which == 0 {
+            let client = tcp_accept_nb(a)
+            let _ = tcp_close(client)
+            print("ready a")
+        }
+        if which < 0 {
+            print("poll timeout")
+        }
+    }
+
+    let _ = tcp_close(a)
+    let _ = tcp_close(b)
+    print("io_poll done")
+}

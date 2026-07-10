@@ -1,0 +1,8 @@
+fn TestRegexCapture() {
+    assert_eq_str(regex_capture("a(b+)c", "xxabbbc yy", 1), "bbb")
+    assert_eq_str(regex_capture("(cat)|(dog)", "xxdogyy", 2), "dog")
+    assert_eq_str(regex_capture("([0-9]+)-([0-9]+)", "v1-42", 1), "1")
+    assert_eq_str(regex_capture("([0-9]+)-([0-9]+)", "v1-42", 2), "42")
+    assert_eq_str(regex_capture("hello", "hello", 0), "hello")
+    assert_eq_str(regex_capture("nope", "yes", 1), "")
+}

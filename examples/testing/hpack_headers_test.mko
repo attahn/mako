@@ -1,0 +1,132 @@
+fn TestHpackIndexed() {
+    let b = hpack_encode_indexed(2)
+    assert_eq(len(b), 1)
+    assert_eq(hpack_decode_indexed(b), 2)
+    assert_eq(hpack_decode_stub(b), 2)
+    assert(str_eq(hpack_static_name(2), ":method"))
+    assert(str_eq(hpack_static_value(2), "GET"))
+    assert_eq(hpack_decode_indexed("x"), -1)
+    assert_eq(len(hpack_encode_indexed(0)), 0)
+}
+
+fn TestHpackLiteral() {
+    let lit = hpack_encode_literal("x-mako", "ok")
+    assert(str_eq(hpack_literal_name(lit), "x-mako"))
+    assert(str_eq(hpack_literal_value(lit), "ok"))
+    assert_eq(len(hpack_literal_name("x")), 0)
+}
+
+fn TestHpackHuffman() {
+    let e = hpack_huffman_encode("www.example.com")
+    assert_eq(len(e), 12)
+    assert(str_eq(hpack_huffman_decode(e), "www.example.com"))
+    let e2 = hpack_huffman_encode("mako")
+    assert(str_eq(hpack_huffman_decode(e2), "mako"))
+    assert(str_eq(hpack_huffman_decode(hpack_huffman_encode("")), ""))
+}
+
+fn TestHpackDyn() {
+    let _ = hpack_dyn_clear()
+    assert_eq(hpack_dyn_insert("a", "1"), 62)
+    assert_eq(hpack_dyn_insert("b", "2"), 62)
+    assert_eq(hpack_dyn_len(), 2)
+    assert(str_eq(hpack_dyn_name(), "b"))
+    assert(str_eq(hpack_dyn_name_at(62), "b"))
+    assert(str_eq(hpack_dyn_name_at(63), "a"))
+    assert(str_eq(hpack_dyn_value_at(63), "1"))
+    // fill to capacity 4 then evict oldest
+    assert_eq(hpack_dyn_insert("c", "3"), 62)
+    assert_eq(hpack_dyn_insert("d", "4"), 62)
+    assert_eq(hpack_dyn_len(), 4)
+    assert_eq(hpack_dyn_insert("e", "5"), 62)
+    assert_eq(hpack_dyn_len(), 4)
+    assert(str_eq(hpack_dyn_name_at(62), "e"))
+    assert(str_eq(hpack_dyn_name_at(65), "b"))
+    assert_eq(len(hpack_dyn_name_at(66)), 0) // a evicted
+    let b = hpack_encode_indexed(62)
+    assert_eq(hpack_decode_indexed(b), 62)
+    let _ = hpack_dyn_clear()
+    assert_eq(hpack_dyn_len(), 0)
+}
+
+fn TestHttp2HeadersFrame() {
+    let block = hpack_encode_indexed(2)
+    // END_HEADERS = 0x4
+    let fr = http2_headers_frame(1, block, 4)
+    assert_eq(http2_frame_type(fr), 1)
+    assert_eq(http2_frame_stream(fr), 1)
+    assert_eq(http2_frame_len(fr), 1)
+    assert_eq(http2_frame_flags(fr), 4)
+}
+
+fn TestHttp2DataFrame() {
+    let fr = http2_data_frame(3, "hi", 1)
+    assert_eq(http2_frame_type(fr), 0)
+    assert_eq(http2_frame_stream(fr), 3)
+    assert_eq(http2_frame_len(fr), 2)
+    assert_eq(http2_frame_flags(fr), 1)
+    assert(str_eq(http2_frame_payload(fr), "hi"))
+}
+
+fn TestHttp2Continuation() {
+    // HEADERS without END_HEADERS + CONTINUATION with END_HEADERS on same stream
+    let h = http2_headers_frame(7, hpack_encode_indexed(2), 0)
+    let c = http2_continuation_frame(7, hpack_encode_literal("x-a", "b"), 4)
+    let both = http2_concat_frames(h, c)
+    assert_eq(http2_frame_type(both), 1)
+    assert_eq(http2_frame_stream(both), 7)
+    let second = http2_frame_at(both, 1)
+    assert_eq(http2_frame_type(second), 9)
+    assert_eq(http2_frame_stream(second), 7)
+    assert_eq(http2_frame_flags(second), 4)
+}
+
+fn TestHttp2StreamState() {
+    let _ = http2_stream_reset()
+    assert_eq(http2_stream_state(), 0)
+    // HEADERS open stream 5
+    let h = http2_headers_frame(5, hpack_encode_indexed(2), 4)
+    assert_eq(http2_stream_apply(h), 1)
+    assert_eq(http2_stream_id(), 5)
+    assert_eq(http2_stream_state(), 1)
+    // Inbound DATA END_STREAM → half-closed remote (still half-closed aggregate)
+    let d1 = http2_data_frame(5, "x", 1)
+    assert_eq(http2_stream_apply(d1), 2)
+    assert_eq(http2_stream_half_closed_remote(5), 1)
+    assert_eq(http2_stream_half_closed_local(5), 0)
+    // Outbound END_STREAM → both directions → closed
+    let d2 = http2_data_frame(5, "", 1)
+    assert_eq(http2_stream_apply_local(d2), 3)
+    assert_eq(http2_stream_half_closed_local(5), 1)
+    let _ = http2_stream_reset()
+}
+
+fn TestHttp2MultiStream() {
+    let _ = http2_stream_reset()
+    let h1 = http2_headers_frame(1, hpack_encode_indexed(2), 4)
+    let h3 = http2_headers_frame(3, hpack_encode_indexed(4), 4)
+    assert_eq(http2_stream_apply(h1), 1)
+    assert_eq(http2_stream_apply(h3), 1)
+    assert_eq(http2_stream_state_of(1), 1)
+    assert_eq(http2_stream_state_of(3), 1)
+    assert_eq(http2_stream_apply(http2_data_frame(1, "a", 1)), 2)
+    assert_eq(http2_stream_state_of(1), 2)
+    assert_eq(http2_stream_half_closed_remote(1), 1)
+    assert_eq(http2_stream_state_of(3), 1)
+    assert_eq(http2_stream_apply(http2_data_frame(3, "b", 1)), 2)
+    assert_eq(http2_stream_state_of(3), 2)
+    let _ = http2_stream_reset()
+}
+
+fn TestHttp2HalfClosedDirs() {
+    // Remote END_STREAM alone stays half-closed; second remote END_STREAM does not close.
+    let _ = http2_stream_reset()
+    assert_eq(http2_stream_apply(http2_headers_frame(1, hpack_encode_indexed(2), 4)), 1)
+    assert_eq(http2_stream_apply(http2_data_frame(1, "x", 1)), 2)
+    assert_eq(http2_stream_apply(http2_data_frame(1, "y", 1)), 2)
+    assert_eq(http2_stream_half_closed_remote(1), 1)
+    assert_eq(http2_stream_half_closed_local(1), 0)
+    // Local END_STREAM closes
+    assert_eq(http2_stream_apply_local(http2_data_frame(1, "", 1)), 3)
+    let _ = http2_stream_reset()
+}

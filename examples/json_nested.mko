@@ -1,0 +1,32 @@
+// Nested JSON: nest object under key, path extract, merge (Partial).
+
+#[derive(json)]
+struct Addr {
+    city: string
+    zip: int
+}
+
+#[derive(json)]
+struct Person {
+    name: string
+    age: int
+}
+
+fn main() {
+    let addr = Addr_to_json("Paris", 75001)
+    print(addr)
+    let person = Person_to_json("Ada", 36)
+    let nested = json_nest("addr", addr)
+    let doc = json_merge(person, nested)
+    print(doc)
+
+    let city = json_path_string(doc, "addr", "city")
+    let zip = json_path_int(doc, "addr", "zip")
+    print(city)
+    print_int(zip)
+
+    let inner = json_get_object(doc, "addr")
+    print(inner)
+    let name = Person_name_from_json(doc)
+    print(name)
+}

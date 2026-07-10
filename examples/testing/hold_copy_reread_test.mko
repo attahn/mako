@@ -1,0 +1,11 @@
+struct Point {
+    x: int
+    y: int
+}
+
+fn TestHoldCopyReread() {
+    hold let p = Point { x: 3, y: 4 }
+    assert_eq(p.x, 3)
+    assert_eq(p.x, 3)
+    assert_eq(p.y, 4)
+}

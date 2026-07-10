@@ -1,0 +1,18 @@
+// WASI preview1 argv + environ via wasi-libc (`args_get` / `environ_get`).
+// Build: mako build examples/wasi_args_env.mko --target wasm32-wasi -o out/wasi_args_env.wasm
+// Run:   wasmtime --env MAKO_WASI_GREET=hi out/wasi_args_env.wasm hello
+// Note: `env_set` soft-fails on WASI — pass env from the host (wasmtime --env).
+fn main() {
+    print_int(argc())
+    if argc() > 1 {
+        print(arg_get(1))
+    } else {
+        print("(no arg)")
+    }
+    let v = env_get("MAKO_WASI_GREET")
+    if len(v) > 0 {
+        print(v)
+    } else {
+        print("(no env)")
+    }
+}

@@ -1,0 +1,33 @@
+// Go-like slices: [1,2,3] is []int with len/cap; a[i:j] shares backing; append grows.
+
+fn main() {
+    let mut s = [1, 2, 3]
+    print_int(len(s))
+    print_int(cap(s))
+
+    let t = s[1:3]
+    print_int(len(t))
+    print_int(t[0])
+    print_int(t[1])
+
+    // Shared backing: mutate through subslice, visible on parent
+    t[0] = 99
+    print_int(s[1])
+
+    s = append(s, 4)
+    print_int(len(s))
+    print_int(s[3])
+    print_int(cap(s))
+
+    let u = s[1:]
+    print_int(len(u))
+    let v = s[:2]
+    print_int(len(v))
+    let w = s[:]
+    print_int(len(w))
+
+    // Three-index form: s[low:high:max]
+    let x = s[0:2:3]
+    print_int(len(x))
+    print_int(cap(x))
+}

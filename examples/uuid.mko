@@ -1,0 +1,27 @@
+// UUID v4 — generate, format, parse, compare
+
+fn main() {
+    let id = uuid_v4()
+    let s = uuid_string(id)
+    print(s)
+    print_int(len(s)) // always 36
+
+    let id2 = uuid_parse(s)
+    if uuid_eq(id, id2) {
+        print("roundtrip")
+    }
+    if uuid_parse_ok(s) {
+        print("ok")
+    }
+    if not uuid_parse_ok("not-a-uuid") {
+        print("reject")
+    }
+    if uuid_is_nil(uuid_nil()) {
+        print("nil")
+    }
+    let chk = uuid_check("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+    match chk {
+        Ok(_) => print("bad_ok")
+        Err(e) => print(e)
+    }
+}

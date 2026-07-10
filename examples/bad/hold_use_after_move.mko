@@ -1,0 +1,6 @@
+// Must fail: use after move via hold rebind (non-Copy).
+fn main() {
+    hold let x = "hi"
+    hold let y = x
+    print(x)
+}

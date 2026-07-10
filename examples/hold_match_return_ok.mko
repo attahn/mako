@@ -1,0 +1,15 @@
+// Diverging match arm must not move `s` for the fall-through path after match.
+fn consume(x: string) {}
+
+fn main() -> int {
+    hold let s = "hi"
+    let n = match 1 {
+        0 => {
+            consume(s)
+            return 1
+        }
+        _ => 2
+    }
+    print(s)
+    return n
+}

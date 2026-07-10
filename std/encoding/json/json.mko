@@ -1,0 +1,4 @@
+fn object_str(key: string, val: string) -> string { return json_ss(key, val) }
+fn get_string(obj: string, key: string) -> string { return json_get_string(obj, key) }
+fn get_int(obj: string, key: string) -> int { return json_get_int(obj, key) }
+fn has(obj: string, key: string) -> bool { return json_has(obj, key) }

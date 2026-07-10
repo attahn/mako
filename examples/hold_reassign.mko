@@ -1,0 +1,6 @@
+// Valid: assign into live hold before any move; then move once.
+fn main() {
+    hold let mut x = 7
+    x = 9
+    print_int(x)
+}

@@ -1,0 +1,12 @@
+// TLS client (insecure verify) — fetch body from local HTTPS server.
+// Run after starting tls_once on :18444 (see scripts/smoke_tls_client.sh).
+
+fn main() {
+    let body = tls_get_insecure("127.0.0.1", 18444, "/")
+    print(body)
+    if str_contains(body, "tls-ok") {
+        print("tls client ok")
+    } else {
+        print("tls client miss")
+    }
+}

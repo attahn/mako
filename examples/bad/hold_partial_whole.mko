@@ -1,0 +1,11 @@
+// Must fail: whole value use after partial field move
+struct Box {
+    label: string
+    n: int
+}
+
+fn main() {
+    hold let b = Box { label: "x", n: 1 }
+    let s = b.label
+    print(b)
+}

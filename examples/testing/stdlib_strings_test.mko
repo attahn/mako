@@ -1,0 +1,41 @@
+fn TestStrSplitJoin() {
+    let parts = str_split("a,b,c", ",")
+    assert_eq(len(parts), 3)
+    assert_eq_str(parts[0], "a")
+    assert_eq_str(parts[2], "c")
+    assert_eq_str(str_join(parts, "-"), "a-b-c")
+}
+
+fn TestStrTrimReplace() {
+    assert_eq_str(str_trim_space("  hi  "), "hi")
+    assert_eq_str(str_trim("---x---", "-"), "x")
+    assert_eq_str(str_replace("foo bar foo", "foo", "baz"), "baz bar baz")
+    assert(str_has_prefix("mako", "ma"))
+    assert(str_has_suffix("mako", "ko"))
+    assert_eq(str_index("hello", "ll"), 2)
+    assert_eq(str_last_index("ababa", "ba"), 3)
+}
+
+fn TestStrCaseFields() {
+    assert_eq_str(str_to_lower("AbC"), "abc")
+    assert_eq_str(str_to_upper("AbC"), "ABC")
+    assert_eq_str(str_repeat("ab", 3), "ababab")
+    let f = str_fields("  one  two\tthree ")
+    assert_eq(len(f), 3)
+    assert_eq_str(f[1], "two")
+}
+
+fn TestStrconvFmt() {
+    assert_eq_str(format_int(42), "42")
+    assert_eq_str(format_bool(true), "true")
+    assert_eq_str(fmt_sprintf("hi %s!", "mako"), "hi mako!")
+    assert_eq_str(fmt_sprintf_d("n=%d", 7), "n=7")
+    match parse_bool("true") {
+        Ok(v) => assert_eq(v, 1),
+        Err(_) => assert(false),
+    }
+    match parse_bool("nope") {
+        Ok(_) => assert(false),
+        Err(_) => assert(true),
+    }
+}

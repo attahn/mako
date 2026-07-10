@@ -1,0 +1,48 @@
+fn TestBinaryBe() {
+    let b = binary_put_u16be(513)
+    assert_eq(binary_u16be(b), 513)
+    let b2 = binary_put_u32be(67305985)
+    assert_eq(binary_u32be(b2), 67305985)
+    let b3 = binary_put_u64be(578437695752307201)
+    assert_eq(binary_u64be(b3), 578437695752307201)
+}
+
+fn TestHtmlTemplateRangeWith() {
+    let t = html_template_range("X{{range items}}[{{.}}]{{end}}Y", "items", "a,b")
+    assert(str_contains(t, "[a]"))
+    assert(str_contains(t, "[b]"))
+    assert(str_contains(t, "X"))
+    assert(str_contains(t, "Y"))
+    let t2 = html_template_with("pre{{with name}}Hi {{name}}{{end}}post", "name", "Ada")
+    assert(str_contains(t2, "Hi Ada"))
+    let t3 = html_template_with("pre{{with name}}Hi {{name}}{{end}}post", "name", "")
+    assert(not str_contains(t3, "Hi"))
+}
+
+fn TestGobStructReflectDepth() {
+    let rv = reflect_value_new("Name:string,Age:int")
+    assert_eq(reflect_value_set(rv, "Name", "Ada"), 0)
+    assert_eq(reflect_value_set_at(rv, 1, "42"), 0)
+    assert_eq_str(reflect_value_field_at(rv, 0), "Ada")
+    assert_eq_str(reflect_value_schema(rv), "Name:string,Age:int")
+    let enc = gob_encode_struct(rv)
+    let d = gob_decode_struct(enc)
+    assert_eq_str(reflect_value_get(d, "Name"), "Ada")
+    assert_eq_str(reflect_value_field_at(d, 1), "42")
+}
+
+fn TestGifLzwRoundtrip() {
+    let px = "ABCDEF" // 2x1 RGB
+    let g = gif_encode_rgb_lzw(2, 1, px)
+    assert(len(g) > 10)
+    let out = gif_decode_rgb_lzw(g)
+    assert_eq(len(out), 6)
+    assert_eq_str(out, px)
+}
+
+fn TestRegexpQuoteAndG() {
+    assert(regex_match("\\Q.+\\E", ".+"))
+    assert(not regex_match("\\Q.+\\E", "ab"))
+    assert(regex_match("\\Ghi", "hi"))
+    assert_eq(smtp_send_dialog("127.0.0.1", 1, "a@b.com", "c@d.com", "x"), -1)
+}

@@ -1,0 +1,17 @@
+fn main() {
+    let dir = "/tmp/mako_fs_test_dir"
+    let path = "/tmp/mako_fs_test_dir/a.txt"
+    let _ = mkdir(dir)
+    let _ = write_file(path, "ok")
+    if file_exists(path) {
+        print_int(1)
+    } else {
+        print_int(0)
+    }
+    let _ = remove_file(path)
+    if file_exists(path) {
+        print_int(0)
+    } else {
+        print_int(1)
+    }
+}

@@ -1,0 +1,6 @@
+// Must fail: mix int8 and int64
+fn main() {
+    let a: int8 = 1
+    let b: int64 = 2
+    print_int8(a + b)
+}

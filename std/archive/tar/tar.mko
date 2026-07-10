@@ -1,0 +1,2 @@
+fn write_file(path: string, name: string, data: string) -> int { return tar_write_file(path, name, data) }
+fn first_name(path: string) -> string { return tar_first_name(path) }

@@ -1,0 +1,13 @@
+// TCP listen — one accept, write greeting, close (non-blocking demo)
+fn main() {
+    let fd = tcp_listen(18082)
+    if fd < 0 {
+        print("listen failed")
+        return
+    }
+    print("tcp listening :18082 (accept once)")
+    // For CI/smoke we don't block forever — use http_echo for long servers.
+    // This example only verifies listen succeeds then closes.
+    let _ = tcp_close(fd)
+    print("tcp closed")
+}

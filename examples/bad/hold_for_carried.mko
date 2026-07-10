@@ -1,0 +1,8 @@
+// Must fail: for-loop carried move (same seed as while).
+fn main() {
+    hold let x = "hi"
+    for i in range 2 {
+        let y = x
+        print(y)
+    }
+}

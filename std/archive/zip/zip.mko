@@ -1,0 +1,9 @@
+fn write_file(path: string, name: string, data: string) -> int { return zip_write_file(path, name, data) }
+fn first_name(path: string) -> string { return zip_first_name(path) }
+fn read_file(path: string, name: string) -> string { return zip_read_file(path, name) }
+fn deflate_available() -> int { return zip_deflate_available() }
+fn create() -> ZipWriter { return zip_create() }
+fn add(z: ZipWriter, name: string, data: string) -> int { return zip_add(z, name, data) }
+fn write_to(z: ZipWriter, path: string) -> int { return zip_write_to(z, path) }
+fn close(z: ZipWriter) { zip_close(z) }
+fn list(path: string) -> []string { return zip_list(path) }

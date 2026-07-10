@@ -1,0 +1,30 @@
+# Rust build output
+/target
+
+# Mako build caches and toolchains
+**/.mako/cache/
+**/.mako/toolchains/
+**/.mako/wasmtime-cache/
+**/.mako/deps/
+**/.mako/registry/
+.mako/
+
+# Compiled output
+/out/
+/app
+/udp_debug
+
+# Debug symbol bundles
+*.dSYM/
+
+# Internal working docs (not for public repo)
+/docs/internal/
+
+# Third-party build artifacts
+runtime/third_party/quiche/build_attempt.log
+runtime/third_party/quiche/target/
+
+# OS files
+.DS_Store
+
+# Lock files (mako.lock is committed intentionally; Cargo.lock too)

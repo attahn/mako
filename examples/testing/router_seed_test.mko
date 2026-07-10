@@ -1,0 +1,30 @@
+fn TestRouterGroupedRoutesAndHandlers() {
+    let r = router_new()
+    assert(r > 0)
+    assert_eq(router_count(r), 0)
+    assert(router_add(r, "GET", "/health", "health_handler") > 0)
+
+    let api = router_group(r, "/api/v1")
+    assert(api > 0)
+    assert(router_add(api, "GET", "/users/{id}", "user_show") > 0)
+    assert(router_add(api, "POST", "/users", "user_create") > 0)
+    assert_eq(router_count(r), 3)
+    assert_eq(router_count(api), 3)
+
+    let req = http_request_parse("GET /api/v1/users/42 HTTP/1.1\r\n\r\n")
+    assert_eq_str(router_match(r, req), "user_show")
+    assert_eq_str(router_param(r, req, "id"), "42")
+    assert_eq_str(router_param(r, req, "missing"), "")
+    assert_eq_str(router_match(api, req), "user_show")
+}
+
+fn TestRouterMatchPathAndMisses() {
+    let r = router_new()
+    let api = router_group(r, "api")
+    assert(router_add(api, "POST", "items/{item}", "item_create") > 0)
+
+    assert_eq_str(router_match_path(r, "POST", "/api/items/sku-1"), "item_create")
+    assert_eq_str(router_match_path(r, "GET", "/api/items/sku-1"), "")
+    assert_eq_str(router_match_path(r, "POST", "/api/items"), "")
+    assert_eq(router_count(0), 0)
+}

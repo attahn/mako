@@ -1,0 +1,26 @@
+// Explicit conversions: int family, float, string <-> []byte.
+
+fn main() {
+    let a: int = 10
+    let b = int64(a)
+    let c = int32(b)
+    let d = int8(c)
+    let e = uint64(a)
+    let f = byte(65)
+    print_int(int(d))
+    print_int64(b)
+    print_int32(c)
+    print_int8(d)
+    print_uint64(e)
+    print_int(int(f))
+
+    let g = float64(a)
+    let h = int(g)
+    print_int(h)
+    print(string(a))
+    print(string(b))
+
+    let buf = bytes("ok")
+    print(string(buf))
+    print_int(len(buf))
+}

@@ -1,0 +1,5 @@
+// Must fail at check time: int8 literal out of range
+fn main() {
+    let x = int8(200)
+    print_int8(x)
+}

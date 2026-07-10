@@ -1,0 +1,3 @@
+fn compress(s: string) -> string { return gzip_compress(s) }
+fn decompress(s: string) -> string { return gzip_decompress(s) }
+fn available() -> int { return gzip_available() }

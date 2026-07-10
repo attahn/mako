@@ -1,0 +1,13 @@
+fn main() {
+    let nums = json_array_ints3(1, 2, 3)
+    let more = json_array_push_string(json_array_strings2("a", "b"), "c")
+    print(more)
+    print_int(json_array_len(more))
+
+    let mut m = make(map[string]string, 4)
+    m["k"] = "v"
+    m["x"] = "y"
+    let obj = json_object_from_map_ss(m)
+    print(obj)
+    print(json_get_string(obj, "k"))
+}

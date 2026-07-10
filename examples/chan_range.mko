@@ -1,0 +1,22 @@
+// Range over channel until close
+
+fn producer(ch: chan[int], n: int) -> int {
+    for i in n {
+        let _ = ch.send(i + 1)
+    }
+    ch.close()
+    return n
+}
+
+fn main() {
+    let ch = chan_new(4)
+    crew t {
+        let p = t.kick(producer(ch, 5))
+        let mut sum = 0
+        for v in range ch {
+            sum = sum + v
+        }
+        let _ = p.join()
+        print_int(sum) // 1+2+3+4+5 = 15
+    }
+}

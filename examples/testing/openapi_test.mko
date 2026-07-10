@@ -1,0 +1,12 @@
+fn TestOpenApiRouteAndDoc() {
+    let route = openapi_route("GET", "/health", "Health check")
+    assert(str_contains(route, "\"/health\""))
+    assert(str_contains(route, "\"get\""))
+    assert(str_contains(route, "\"summary\":\"Health check\""))
+
+    let doc = openapi_doc("Demo", "1.0.0", route)
+    assert(str_contains(doc, "\"openapi\":\"3.1.0\""))
+    assert(str_contains(doc, "\"title\":\"Demo\""))
+    assert(str_contains(doc, "\"version\":\"1.0.0\""))
+    assert(str_contains(doc, "\"paths\""))
+}

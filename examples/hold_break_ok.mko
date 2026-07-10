@@ -1,0 +1,11 @@
+// Dead code after `break` must not move `s` for the path after the loop.
+fn consume(t: string) {}
+
+fn main() {
+    hold let s = "hi"
+    while true {
+        break
+        consume(s)
+    }
+    print(s)
+}

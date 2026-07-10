@@ -1,0 +1,433 @@
+// Live OpenSSL TLS / h2 integration tests.
+// Requires MAKO_HAS_OPENSSL (macOS Homebrew openssl@3).
+// Distinct ports per crew avoid TIME_WAIT races.
+//
+// Opt-in: set MAKO_LIVE_TLS=1 to run (skipped otherwise — like CI without Redis).
+//   MAKO_LIVE_TLS=1 cargo run --quiet -- test examples/testing/tls_live_test.mko
+
+fn live_tls_enabled() -> int {
+    let v = env_get("MAKO_LIVE_TLS")
+    if str_eq(v, "1") {
+        return 1
+    }
+    if str_eq(v, "true") {
+        return 1
+    }
+    return 0
+}
+
+fn serve_tls_http(port: int) -> int {
+    return tls_serve_once(
+        port,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "tls-ok\n"
+    )
+}
+
+fn TestTlsLiveHandshakeGet() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_http(18450))
+        sleep_ms(100)
+        let hs = tls_handshake_ok("localhost", 18450, "runtime/certs/dev.crt")
+        assert(str_eq(hs, "ok"))
+        let _ = s.join()
+    }
+    crew t2 {
+        let s2 = t2.kick(serve_tls_http(18452))
+        sleep_ms(100)
+        let ver = tls_handshake_version("localhost", 18452, "runtime/certs/dev.crt")
+        assert(str_contains(ver, "TLS"))
+        let _ = s2.join()
+    }
+    crew t3 {
+        let s3 = t3.kick(serve_tls_http(18453))
+        sleep_ms(100)
+        let body = tls_get("localhost", 18453, "/", "runtime/certs/dev.crt")
+        assert(str_contains(body, "tls-ok"))
+        let _ = s3.join()
+    }
+}
+
+fn TestTlsLivePost() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_http(18454))
+        sleep_ms(100)
+        let body = tls_post(
+            "localhost",
+            18454,
+            "/",
+            "ping",
+            "runtime/certs/dev.crt"
+        )
+        assert(str_contains(body, "tls-ok"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_h2() -> int {
+    return tls_serve_once_h2(
+        18451,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "h2-ok\n"
+    )
+}
+
+fn TestTlsLiveH2Settings() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_h2())
+        sleep_ms(100)
+        let alpn = tls_h2_settings_exchange("localhost", 18451, "runtime/certs/dev.crt")
+        assert(str_eq(alpn, "h2"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_h2_get() -> int {
+    return tls_serve_once_h2(
+        18455,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "h2-ok\n"
+    )
+}
+
+fn TestTlsLiveH2Get() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_h2_get())
+        sleep_ms(100)
+        let resp = tls_h2_get("localhost", 18455, "/", "runtime/certs/dev.crt")
+        assert(str_contains(resp, "200"))
+        assert(str_contains(resp, "h2-ok"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_h2_post() -> int {
+    return tls_serve_once_h2(
+        18456,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "h2-post-ok\n"
+    )
+}
+
+fn TestTlsLiveH2Post() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_h2_post())
+        sleep_ms(100)
+        let resp = tls_h2_post(
+            "localhost",
+            18456,
+            "/",
+            "payload",
+            "runtime/certs/dev.crt"
+        )
+        assert(str_contains(resp, "200"))
+        assert(str_contains(resp, "h2-post-ok"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_h2_twice() -> int {
+    return tls_serve_h2_n(
+        18457,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "h2-ka\n",
+        2
+    )
+}
+
+fn TestTlsLiveH2KeepAlive() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_h2_twice())
+        sleep_ms(100)
+        let resp = tls_h2_get_twice("localhost", 18457, "/", "runtime/certs/dev.crt")
+        // Two "200" status markers on one connection (streams 1 then 3).
+        assert(str_contains(resp, "200"))
+        assert(str_contains(resp, "h2-ka"))
+        // Response encodes both replies: "200\n<body>\n200\n<body>"
+        assert(str_contains(resp, "200\nh2-ka\n200"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_h2_routes() -> int {
+    return tls_serve_h2_routes(
+        18458,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "root-body\n",
+        "health-ok\n",
+        2
+    )
+}
+
+fn TestTlsLiveH2MuxRoutes() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_h2_routes())
+        sleep_ms(100)
+        // Overlapping streams 1 (/) and 3 (/health) before reading responses.
+        let resp = tls_h2_mux("localhost", 18458, "runtime/certs/dev.crt")
+        assert(str_eq(resp, "root=root-body;health=health-ok"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_h2_path() -> int {
+    return tls_serve_h2_routes(
+        18459,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "from-root\n",
+        "from-health\n",
+        1
+    )
+}
+
+fn TestTlsLiveH2PathHealth() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_h2_path())
+        sleep_ms(100)
+        let resp = tls_h2_get("localhost", 18459, "/health", "runtime/certs/dev.crt")
+        assert(str_contains(resp, "200"))
+        assert(str_contains(resp, "from-health"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_grpc() -> int {
+    return tls_serve_grpc_once(
+        18460,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key"
+    )
+}
+
+fn TestTlsLiveGrpcUnary() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_grpc())
+        sleep_ms(100)
+        let resp = tls_grpc_unary(
+            "localhost",
+            18460,
+            "/mako.Echo/Say",
+            "hello",
+            42,
+            "runtime/certs/dev.crt"
+        )
+        // ok:<reply-name>:<id>:<grpc-status>
+        assert(str_eq(resp, "ok:echo:42:0"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_grpc_stream() -> int {
+    return tls_serve_grpc_stream(
+        18461,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key"
+    )
+}
+
+fn TestTlsLiveGrpcStream() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_grpc_stream())
+        sleep_ms(100)
+        // Client sends 2 DATA msgs; server echoes both + grpc-status trailer.
+        let resp = tls_grpc_stream(
+            "localhost",
+            18461,
+            "/mako.Echo/Stream",
+            "a",
+            1,
+            "b",
+            2,
+            "runtime/certs/dev.crt"
+        )
+        assert(str_eq(resp, "ok:a:1;b:2:0"))
+        let _ = s.join()
+    }
+}
+
+fn serve_tls_h2_wu() -> int {
+    return tls_serve_h2_wu(
+        18462,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "wu-ok\n",
+        12345
+    )
+}
+
+fn TestTlsLiveH2WindowUpdate() {
+    if live_tls_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_tls_h2_wu())
+        sleep_ms(100)
+        // Server sends WINDOW_UPDATE(12345); client observes it then completes GET.
+        let resp = tls_h2_window_get("localhost", 18462, "/", "runtime/certs/dev.crt")
+        assert(str_eq(resp, "wu:12345;200;wu-ok"))
+        let _ = s.join()
+    }
+}
+
+fn live_nghttp2_enabled() -> int {
+    if nghttp2_available() == 0 {
+        return 0
+    }
+    let v = env_get("MAKO_LIVE_NGHTTP2")
+    if str_eq(v, "1") {
+        return 1
+    }
+    if str_eq(v, "true") {
+        return 1
+    }
+    // Also allow under MAKO_LIVE_TLS when lib is present.
+    return live_tls_enabled()
+}
+
+fn serve_nghttp2_target() -> int {
+    return tls_serve_once_h2(
+        18463,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "ng-ok\n"
+    )
+}
+
+fn TestNghttp2LiveGet() {
+    if live_nghttp2_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_nghttp2_target())
+        sleep_ms(100)
+        let resp = nghttp2_get("localhost", 18463, "/", "runtime/certs/dev.crt")
+        assert(str_eq(resp, "nghttp2:200;ng-ok"))
+        let _ = s.join()
+    }
+}
+
+fn serve_nghttp2_path() -> int {
+    return tls_serve_h2_routes(
+        18464,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "root-ng\n",
+        "health-ng\n",
+        1
+    )
+}
+
+fn TestNghttp2LiveGetPath() {
+    if live_nghttp2_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_nghttp2_path())
+        sleep_ms(100)
+        // Path arg customization: GET /health
+        let resp = nghttp2_get(
+            "localhost",
+            18464,
+            "/health",
+            "runtime/certs/dev.crt"
+        )
+        assert(str_eq(resp, "nghttp2:200;health-ng"))
+        let _ = s.join()
+    }
+}
+
+fn serve_nghttp2_post() -> int {
+    return tls_serve_once_h2(
+        18465,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "post-ng-ok\n"
+    )
+}
+
+fn TestNghttp2LivePost() {
+    if live_nghttp2_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_nghttp2_post())
+        sleep_ms(100)
+        let resp = nghttp2_post(
+            "localhost",
+            18465,
+            "/",
+            "hello-body",
+            "runtime/certs/dev.crt"
+        )
+        assert(str_eq(resp, "nghttp2:200;post-ng-ok"))
+        let _ = s.join()
+    }
+}
+
+fn serve_nghttp2_mux() -> int {
+    return tls_serve_h2_routes(
+        18466,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "mux-root\n",
+        "mux-health\n",
+        2
+    )
+}
+
+fn TestNghttp2LiveMux() {
+    if live_nghttp2_enabled() == 0 {
+        return
+    }
+    crew t {
+        let s = t.kick(serve_nghttp2_mux())
+        sleep_ms(100)
+        // Two overlapping GETs on one nghttp2 session.
+        let resp = nghttp2_get_two(
+            "localhost",
+            18466,
+            "/",
+            "/health",
+            "runtime/certs/dev.crt"
+        )
+        assert(str_eq(resp, "nghttp2:200;mux-root|200;mux-health"))
+        let _ = s.join()
+    }
+}

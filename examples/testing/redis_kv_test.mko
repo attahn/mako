@@ -1,0 +1,44 @@
+fn serve_kv() -> int {
+    return redis_mock_kv(16380, 3)
+}
+
+fn TestRedisSetGet() {
+    crew t {
+        let s = t.kick(serve_kv())
+        sleep_ms(40)
+        let pong = redis_ping("127.0.0.1", 16380)
+        if str_eq(pong, "") {
+            let _ = s.join()
+            return
+        }
+        assert(str_eq(pong, "PONG"))
+        let ok = redis_set("127.0.0.1", 16380, "k", "mako")
+        assert(str_eq(ok, "OK"))
+        let v = redis_get("127.0.0.1", 16380, "k")
+        assert(str_eq(v, "mako"))
+        let _ = s.join()
+    }
+}
+
+fn serve_kv4() -> int {
+    return redis_mock_kv(16381, 5)
+}
+
+fn TestRedisDelExists() {
+    crew t {
+        let s = t.kick(serve_kv4())
+        sleep_ms(40)
+        let pong = redis_ping("127.0.0.1", 16381)
+        if str_eq(pong, "") {
+            let _ = s.join()
+            return
+        }
+        assert(str_eq(pong, "PONG"))
+        let ok = redis_set("127.0.0.1", 16381, "k", "v")
+        assert(str_eq(ok, "OK"))
+        assert(str_eq(redis_exists("127.0.0.1", 16381, "k"), "1"))
+        assert(str_eq(redis_del("127.0.0.1", 16381, "k"), "1"))
+        assert(str_eq(redis_exists("127.0.0.1", 16381, "k"), "0"))
+        let _ = s.join()
+    }
+}

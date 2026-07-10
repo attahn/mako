@@ -1,0 +1,10 @@
+fn iabs(x: int) -> int { return abs(x) }
+fn imin(a: int, b: int) -> int { return min(a, b) }
+fn imax(a: int, b: int) -> int { return max(a, b) }
+fn iclamp(x: int, lo: int, hi: int) -> int { return clamp(x, lo, hi) }
+fn sqrt(x: float) -> float { return math_sqrt(x) }
+fn floor(x: float) -> float { return math_floor(x) }
+fn ceil(x: float) -> float { return math_ceil(x) }
+fn pow(x: float, y: float) -> float { return math_pow(x, y) }
+fn sin(x: float) -> float { return math_sin(x) }
+fn cos(x: float) -> float { return math_cos(x) }

@@ -1,0 +1,3 @@
+fn string(name: string, def: string) -> string { return flag_string(name, def) }
+fn int(name: string, def: int) -> int { return flag_int(name, def) }
+fn bool(name: string, def: int) -> int { return flag_bool(name, def) }

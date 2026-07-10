@@ -1,0 +1,20 @@
+// Interface method dispatch: recv.method(args) → Iface_method(args)
+
+interface Writer {
+    fn write(string) -> int
+}
+
+fn Writer_write(s: string) -> int {
+    print(s)
+    return str_len(s)
+}
+
+fn use_writer(w: int, msg: string) -> int {
+    return w.write(msg)
+}
+
+fn main() {
+    let n = use_writer(0, "via-method")
+    print_int(n)
+    print_int(Writer_write("direct"))
+}

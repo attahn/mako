@@ -1,0 +1,7 @@
+# Mako package manifest (v0 foundation)
+name = "mako-app"
+version = "0.1.0"
+
+[dependencies]
+# path or version pins — resolver is Next
+# "mako/http" = "0.1.0"

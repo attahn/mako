@@ -1,0 +1,6 @@
+// Must fail: mix int32 and int64
+fn main() {
+    let a: int32 = 1
+    let b: int64 = 2
+    print_int32(a + b)
+}

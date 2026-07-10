@@ -1,0 +1,14 @@
+// Arena: request-scoped memory — allocate many, free once. No GC.
+fn main() {
+    arena a {
+        let msg = arena_text(a, "hello arena")
+        print(msg)
+        let xs = arena_ints(a, 4)
+        print_int(len(xs))
+        print_int(xs[0])
+        print_int(xs[3])
+        print_int(arena_stamp(a, 99))
+    }
+    // everything in `a` is gone here — one free for the whole region
+    print("arena done")
+}

@@ -1,0 +1,9 @@
+import {
+    "strings"
+    "fmt"
+}
+
+fn TestBraceImport() {
+    assert(strings.contains("xy", "x"))
+    assert_eq_str(fmt.int(3), "3")
+}

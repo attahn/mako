@@ -1,0 +1,26 @@
+import "../db_engine/lib.mko"
+
+fn TestKvPutGet() {
+    kv_reset()
+    assert_eq(kv_put("x", "42"), 0)
+    let m = kv_load()
+    assert_eq_str(kv_get(m, "x"), "42")
+}
+
+fn TestKvLastWriteWins() {
+    kv_reset()
+    let _ = kv_put("k", "one")
+    let _ = kv_put("k", "two")
+    let m = kv_load()
+    assert_eq_str(kv_get(m, "k"), "two")
+}
+
+fn TestKvDelete() {
+    kv_reset()
+    let _ = kv_put("a", "1")
+    let _ = kv_put("b", "2")
+    let _ = kv_del("a")
+    let m = kv_load()
+    assert_eq_str(kv_get(m, "a"), "")
+    assert_eq_str(kv_get(m, "b"), "2")
+}

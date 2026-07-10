@@ -1,0 +1,24 @@
+// Result + ? + match — no ignored errors
+fn parse_positive(n: int) -> Result[int, string] {
+    if n <= 0 {
+        return error("must be positive")
+    }
+    return Ok(n)
+}
+
+fn double_positive(n: int) -> Result[int, string] {
+    let v = parse_positive(n)?
+    return Ok(v * 2)
+}
+
+fn show(r: Result[int, string]) -> int {
+    match r {
+        Ok(v) => v,
+        Err(e) => -1,
+    }
+}
+
+fn main() {
+    print_int(show(double_positive(21)))
+    print_int(show(double_positive(-3)))
+}

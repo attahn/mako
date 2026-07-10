@@ -1,0 +1,5 @@
+fn main() {
+    log_info("hello")
+    log_warn("careful")
+    log_error("boom")
+}

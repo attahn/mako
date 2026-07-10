@@ -1,0 +1,25 @@
+// Channel select between two chans (Partial multiplex)
+
+fn sender(ch: chan[int], v: int) -> int {
+    sleep_ms(30)
+    let _ = ch.send(v)
+    return 0
+}
+
+fn main() {
+    let a = chan_new(2)
+    let b = chan_new(2)
+    crew t {
+        let _ = t.kick(sender(a, 11))
+        let _ = t.kick(sender(b, 22))
+        // Wait up to 500ms for either
+        let which = chan_select2(a, b, 500)
+        print_int(which)
+        print_int(chan_select_value())
+        // Drain the other if needed
+        sleep_ms(50)
+        let which2 = chan_select2(a, b, 200)
+        print_int(which2)
+        print_int(chan_select_value())
+    }
+}

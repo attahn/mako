@@ -1,0 +1,7 @@
+fn needs_two(a: int, b: int) -> int {
+    return a + b
+}
+
+fn main() {
+    print_int(needs_two(1))
+}

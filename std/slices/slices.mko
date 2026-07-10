@@ -1,0 +1,2 @@
+fn reverse(a: []int) -> []int { return slices_reverse(a) }
+fn unique(a: []int) -> []int { return slices_unique(a) }

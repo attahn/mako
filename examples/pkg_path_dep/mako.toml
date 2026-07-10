@@ -1,0 +1,3 @@
+# Local workspace sketch — no registry
+[workspace]
+members = ["core", "helper", "app"]

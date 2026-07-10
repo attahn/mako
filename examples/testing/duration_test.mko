@@ -1,0 +1,7 @@
+fn TestDurationHelpers() {
+    let t0 = now_ms()
+    time_sleep_ms(1)
+    let d = elapsed_ms(t0)
+    assert(d >= 0)
+    sleep_ms(0)
+}

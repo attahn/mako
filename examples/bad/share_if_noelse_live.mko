@@ -1,0 +1,10 @@
+// Must fail: share used after if without else — skip-then path still holds the borrow.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    if false {
+        share_drop(s)
+    }
+    x = 2
+    print_int(share_get(s))
+}

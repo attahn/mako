@@ -1,0 +1,22 @@
+// HTTP headers + Content-Type on respond
+
+fn main() {
+    let fd = http_bind(18093)
+    if fd < 0 {
+        print("bind failed")
+        return
+    }
+    print("headers demo :18093")
+    while 1 == 1 {
+        let c = http_accept(fd)
+        if c < 0 {
+            // skip
+        } else {
+            let host = http_header(c, "Host")
+            let ua = http_header(c, "User-Agent")
+            print(host)
+            print(ua)
+            let _ = http_respond_ct(c, 200, "application/json", "{\"ok\":true}\n")
+        }
+    }
+}

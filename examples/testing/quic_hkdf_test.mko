@@ -1,0 +1,124 @@
+fn TestQuicHkdfExpandLabel() {
+    // HKDF-Expand-Label demo (not full QUIC packet protection).
+    let secret = "0123456789abcdef0123456789abcdef"
+    let a = quic_hkdf_expand_label_hex(secret, "quic key", 16)
+    let b = quic_hkdf_expand_label_hex(secret, "quic iv", 12)
+    assert_eq(len(a), 32)
+    assert_eq(len(b), 24)
+    assert(not str_eq(a, b))
+    // Deterministic
+    assert(str_eq(a, quic_hkdf_expand_label_hex(secret, "quic key", 16)))
+    assert_eq(len(quic_hkdf_expand_label("", "x", 16)), 0)
+    assert_eq(len(quic_hkdf_expand_label(secret, "x", 0)), 0)
+}
+
+fn TestQuicInitialClientSecret() {
+    // RFC 9001 Appendix A.1: DCID 0x8394c8f03e515708
+    let dcid = hex_decode("8394c8f03e515708")
+    assert_eq(len(dcid), 8)
+    let cis = quic_initial_client_secret_hex(dcid)
+    assert(str_eq(cis, "c00cf151ca5be075ed0ebfb5c80323c42d6b7db67881289af4008f1f6c357aea"))
+    assert_eq(len(quic_initial_client_secret_hex(hex_decode(""))), 0)
+}
+
+fn TestQuicInitialKeyIv() {
+    // RFC 9001 A.1 key/iv from client_initial_secret (payload AEAD only).
+    let dcid = hex_decode("8394c8f03e515708")
+    assert(str_eq(quic_initial_client_key_hex(dcid), "1f369613dd76d5467730efcbe3b1a22d"))
+    assert(str_eq(quic_initial_client_iv_hex(dcid), "fa044b2f42a3fd3b46fb255c"))
+    assert_eq(len(quic_initial_client_key(dcid)), 16)
+    assert_eq(len(quic_initial_client_iv(dcid)), 12)
+}
+
+fn TestQuicInitialProtect() {
+    // Payload AEAD roundtrip (AAD = fake unprotected header).
+    let dcid = hex_decode("8394c8f03e515708")
+    let aad = "fake-unprot-hdr"
+    let pt = "quic-initial-pt"
+    let sealed = quic_initial_protect(dcid, 0, aad, pt)
+    assert_eq(len(sealed), len(pt) + 16)
+    assert(str_eq(quic_initial_unprotect(dcid, 0, aad, sealed), pt))
+    assert_eq(len(quic_initial_unprotect(dcid, 0, "wrong-aad", sealed)), 0)
+    assert_eq(len(quic_initial_unprotect(dcid, 1, aad, sealed)), 0)
+}
+
+fn TestQuicHeaderProtection() {
+    // RFC 9001 A.1 hp key + A.2 AES-ECB mask sample.
+    let dcid = hex_decode("8394c8f03e515708")
+    assert(str_eq(quic_initial_client_hp_hex(dcid), "9f50449e04a0e810283a1e9933adedd2"))
+    let sample = hex_decode("d1b1c98dd7689fb8ec11d242b123dc9b")
+    assert_eq(len(sample), 16)
+    assert(str_eq(quic_initial_hp_mask_hex(dcid, sample), "437b9aec36"))
+    // Apply mask to unprotected A.2 header → protected first byte + PN.
+    let hdr = hex_decode("c300000001088394c8f03e5157080000449e00000002")
+    assert_eq(len(hdr), 22)
+    let mask = quic_initial_hp_mask(dcid, sample)
+    let prot = quic_header_protect_apply(hdr, 18, mask)
+    assert(str_eq(prot, hex_decode("c000000001088394c8f03e5157080000449e7b9aec34")))
+    // Remove restores unprotected header (pn_len after first-byte unmask).
+    assert(str_eq(quic_header_protect_remove(prot, 18, mask), hdr))
+}
+
+fn TestQuicInitialPacketRoundtrip() {
+    // Minimal protected Initial: header + HP + AEAD; decode recovers plaintext.
+    // Uses A.2-shaped header (pn=2 at offset 18); short payload (not full A.2 CRYPTO).
+    let dcid = hex_decode("8394c8f03e515708")
+    let hdr = hex_decode("c300000001088394c8f03e5157080000449e00000002")
+    let pt = "mako-quic-initial-payload!!" // >= 16B so sample fits after AEAD
+    assert(len(pt) >= 16)
+    let pkt = quic_initial_packet_protect(dcid, 2, hdr, 18, pt)
+    assert_eq(len(pkt), len(hdr) + len(pt) + 16)
+    // First 22 bytes = HP-protected header matching A.2 first-byte/PN shape after mask
+    let open = quic_initial_packet_unprotect(dcid, pkt, 22, 18)
+    assert(str_eq(open, pt))
+    // Tamper ciphertext → auth fail
+    let bad = quic_initial_packet_protect(dcid, 2, hdr, 18, "other-payload-bytes!!")
+    assert_eq(len(quic_initial_packet_unprotect(dcid, bad, 22, 18)), len("other-payload-bytes!!"))
+    assert(not str_eq(quic_initial_packet_unprotect(dcid, pkt, 22, 18), "nope"))
+}
+
+fn TestQuicInitialCryptoRoundtrip() {
+    // A.2-closer: CRYPTO frame in protected Initial payload; unprotect recovers CRYPTO data.
+    let dcid = hex_decode("8394c8f03e515708")
+    let hdr = hex_decode("c300000001088394c8f03e5157080000449e00000002")
+    let ch_bytes = "ClientHello-seed-bytes!!" // < 64 for 1-byte varint
+    assert(len(ch_bytes) < 64)
+    let payload = quic_crypto_payload(ch_bytes, 0, 32) // pad so AEAD sample has room
+    assert(len(payload) >= 32)
+    assert(str_eq(quic_payload_crypto_data(payload), ch_bytes))
+    let pkt = quic_initial_packet_protect(dcid, 2, hdr, 18, payload)
+    let open = quic_initial_packet_unprotect(dcid, pkt, 22, 18)
+    assert(str_eq(quic_payload_crypto_data(open), ch_bytes))
+    assert_eq(quic_payload_crypto_data_len(open), len(ch_bytes))
+}
+
+fn TestQuicAckFrame() {
+    // ACK seed: largest=5, delay=0, first_range=2 → smallest=3 (acks 3..5).
+    let a = quic_ack_frame(5, 0, 2)
+    assert_eq(quic_is_ack(a), 1)
+    assert_eq(len(a), 5)
+    assert_eq(quic_ack_largest(a), 5)
+    assert_eq(quic_ack_delay(a), 0)
+    assert_eq(quic_ack_range_count(a), 0)
+    assert_eq(quic_ack_first_range(a), 2)
+    assert_eq(quic_ack_smallest(a), 3)
+    assert_eq(quic_is_ack(quic_crypto_frame("x", 0)), 0)
+    assert_eq(len(quic_ack_frame(64, 0, 0)), 0) // varint limit
+}
+
+fn TestQuicStreamFrame() {
+    // STREAM: id=4, offset=0, data, fin=1
+    let fr = quic_stream_frame(4, 0, "hello", 1)
+    assert_eq(quic_is_stream(fr), 1)
+    assert_eq(quic_stream_id_of(fr), 4)
+    assert_eq(quic_stream_offset(fr), 0)
+    assert_eq(quic_stream_fin(fr), 1)
+    assert_eq(quic_stream_data_len(fr), 5)
+    assert(str_eq(quic_stream_data(fr), "hello"))
+    // With offset
+    let fr2 = quic_stream_frame(1, 8, "xy", 0)
+    assert_eq(quic_stream_offset(fr2), 8)
+    assert_eq(quic_stream_fin(fr2), 0)
+    assert(str_eq(quic_stream_data(fr2), "xy"))
+    assert_eq(quic_is_stream(quic_ack_frame(1, 0, 0)), 0)
+}

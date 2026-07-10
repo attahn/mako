@@ -1,0 +1,5 @@
+fn query_escape(s: string) -> string { return url_query_escape(s) }
+fn scheme(u: string) -> string { return url_scheme(u) }
+fn host(u: string) -> string { return url_host(u) }
+fn path(u: string) -> string { return url_path(u) }
+fn query(u: string) -> string { return url_query(u) }

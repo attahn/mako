@@ -1,0 +1,8 @@
+// Ownership annotations parse; share RC works
+
+fn main() {
+    hold let a = 1
+    share let s = share_int(a)
+    print_int(share_get(s))
+    share_drop(s)
+}

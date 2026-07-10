@@ -1,0 +1,15 @@
+// Nested subtests: t_run siblings; t_run_nested appends under current path.
+
+fn TestSubs() {
+    t_run("ok")
+    assert_eq(1, 1)
+    t_run("also")
+    assert_eq(2, 2)
+}
+
+fn TestNested() {
+    t_run("outer")
+    assert_eq(1, 1)
+    t_run_nested("inner")
+    assert_eq(2, 2)
+}

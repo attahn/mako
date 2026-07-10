@@ -1,0 +1,39 @@
+fn TestBytesLenAppend() {
+    let mut b: []byte = [1, 2, 3]
+    assert_eq(len(b), 3)
+    b = append(b, 4)
+    assert_eq(len(b), 4)
+    assert_eq(b[3], 4)
+}
+
+fn TestBytesStringRoundtrip() {
+    let s = "ab"
+    let b = bytes(s)
+    assert_eq(len(b), 2)
+    assert_eq(b[0], 97)
+    assert_eq_str(string(b), "ab")
+}
+
+fn TestBytesSliceCopy() {
+    let mut src: []byte = [10, 20, 30]
+    let t = src[1:3]
+    assert_eq(len(t), 2)
+    assert_eq(t[0], 20)
+    let mut dst: []byte = [0, 0]
+    let n = copy(dst, src)
+    assert_eq(n, 2)
+    assert_eq(dst[0], 10)
+}
+
+fn TestInt8() {
+    let a: int8 = 3
+    let b: int8 = 4
+    assert_eq(a + b, 7)
+    assert_eq(int(a), 3)
+}
+
+fn TestUint64() {
+    let a: uint64 = uint64(5)
+    let b: uint64 = uint64(6)
+    assert_eq(a + b, 11)
+}

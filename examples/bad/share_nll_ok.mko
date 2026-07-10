@@ -1,0 +1,10 @@
+// Share ends at block end — mutation after block should be OK
+fn main() {
+    let mut x = 1
+    {
+        share let s = share_int(x)
+        print_int(share_get(s))
+    }
+    x = 2
+    print_int(x)
+}

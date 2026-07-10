@@ -1,0 +1,14 @@
+interface Writer {
+    fn write(string) -> int
+}
+
+fn Writer_write(s: string) -> int {
+    return str_len(s)
+}
+
+fn TestIfaceMethodDispatch() {
+    let w = 0
+    let n = w.write("abcd")
+    assert_eq(n, 4)
+    assert_eq(Writer_write("xy"), 2)
+}

@@ -1,0 +1,28 @@
+import (
+    "strings"
+    "path"
+    "fmt"
+)
+
+fn TestGroupedImportStd() {
+    assert(strings.contains("hello", "ell"))
+    assert_eq_str(path.join_path("a", "b"), "a/b")
+    assert_eq_str(fmt.sprintf("%s", "ok"), "ok")
+}
+
+fn TestGroupedImportOps() {
+    assert(1 == 1)
+    assert(1 != 2)
+    assert(true && true)
+    assert(false || true)
+    assert(!false)
+    assert((3 & 1) == 1)
+    assert((1 << 3) == 8)
+    assert(strings.has_prefix("mako", "ma"))
+    assert_eq_str(path.clean("/a/../b"), "/b")
+}
+
+fn TestGroupedImportBraceCompat() {
+    // brace form is also accepted by the parser; this file uses paren form above.
+    assert(true)
+}

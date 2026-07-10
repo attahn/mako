@@ -1,0 +1,29 @@
+// HTTP handler surface: bind / accept / method / path / respond
+// Routes `/` vs `/health` — run and curl; blocks until killed.
+
+fn main() {
+    let fd = http_bind(18090)
+    if fd < 0 {
+        print("bind failed")
+        return
+    }
+    print("routes on :18090")
+    while 1 == 1 {
+        let c = http_accept(fd)
+        if c < 0 {
+            // skip
+        } else {
+            let p = http_path(c)
+            if str_eq(p, "/health") {
+                let _ = http_respond(c, 200, "ok\n")
+            } else {
+                if str_eq(p, "/") {
+                    let _ = http_respond(c, 200, "home\n")
+                } else {
+                    let _ = http_respond(c, 404, "missing\n")
+                }
+            }
+            let _ = http_close(c)
+        }
+    }
+}

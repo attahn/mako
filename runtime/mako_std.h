@@ -1,0 +1,3251 @@
+/* Mako stdlib extras — JSON, crypto, log/metrics, RC share, slices, DB stubs */
+#ifndef MAKO_STD_H
+#define MAKO_STD_H
+
+#include "mako_rt.h"
+#include "mako_stdlib.h"
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#endif
+
+#if defined(__APPLE__)
+#include <CommonCrypto/CommonDigest.h>
+#include <CommonCrypto/CommonHMAC.h>
+#define MAKO_HAS_CC 1
+#elif defined(MAKO_USE_OPENSSL)
+#include <openssl/sha.h>
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
+#define MAKO_HAS_OPENSSL 1
+#endif
+
+#include "mako_goext.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ---- Logging ---- */
+static inline void mako_log_info(MakoString msg) {
+    fprintf(stderr, "[%lld info] ", (long long)mako_now_ms());
+    fwrite(msg.data, 1, msg.len, stderr);
+    fputc('\n', stderr);
+}
+
+static inline void mako_log_warn(MakoString msg) {
+    fprintf(stderr, "[%lld warn] ", (long long)mako_now_ms());
+    fwrite(msg.data, 1, msg.len, stderr);
+    fputc('\n', stderr);
+}
+
+static inline void mako_log_error(MakoString msg) {
+    fprintf(stderr, "[%lld error] ", (long long)mako_now_ms());
+    fwrite(msg.data, 1, msg.len, stderr);
+    fputc('\n', stderr);
+}
+
+/* ---- Backend validation helpers ---- */
+static inline int64_t mako_validate_required(MakoString value) {
+    for (size_t i = 0; i < value.len; i++) {
+        unsigned char c = (unsigned char)value.data[i];
+        if (c != ' ' && c != '\t' && c != '\n' && c != '\r') return 1;
+    }
+    return 0;
+}
+
+static inline int64_t mako_validate_min_len(MakoString value, int64_t min_len) {
+    if (min_len < 0) min_len = 0;
+    return value.len >= (size_t)min_len ? 1 : 0;
+}
+
+static inline int64_t mako_validate_max_len(MakoString value, int64_t max_len) {
+    if (max_len < 0) return 0;
+    return value.len <= (size_t)max_len ? 1 : 0;
+}
+
+static inline int64_t mako_validate_int_range(int64_t value, int64_t min, int64_t max) {
+    return value >= min && value <= max ? 1 : 0;
+}
+
+static inline int64_t mako_validate_email(MakoString value) {
+    if (value.len < 3) return 0;
+    size_t at = value.len;
+    size_t dot_after_at = value.len;
+    for (size_t i = 0; i < value.len; i++) {
+        char c = value.data[i];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') return 0;
+        if (c == '@') {
+            if (at != value.len || i == 0) return 0;
+            at = i;
+        } else if (c == '.' && at != value.len && i > at + 1) {
+            dot_after_at = i;
+        }
+    }
+    return at != value.len && dot_after_at + 1 < value.len ? 1 : 0;
+}
+
+/* ---- Game loop / fixed timestep helpers ---- */
+static inline int64_t mako_game_fixed_steps(int64_t elapsed_ms, int64_t step_ms, int64_t max_steps) {
+    if (elapsed_ms <= 0 || step_ms <= 0 || max_steps <= 0) return 0;
+    int64_t steps = elapsed_ms / step_ms;
+    return steps > max_steps ? max_steps : steps;
+}
+
+static inline int64_t mako_game_fixed_remainder(int64_t elapsed_ms, int64_t step_ms, int64_t max_steps) {
+    if (elapsed_ms <= 0 || step_ms <= 0 || max_steps <= 0) return elapsed_ms > 0 ? elapsed_ms : 0;
+    int64_t steps = mako_game_fixed_steps(elapsed_ms, step_ms, max_steps);
+    int64_t rem = elapsed_ms - steps * step_ms;
+    if (rem < 0) return 0;
+    return rem;
+}
+
+static inline int64_t mako_game_alpha(int64_t remainder_ms, int64_t step_ms, int64_t scale) {
+    if (remainder_ms <= 0 || step_ms <= 0 || scale <= 0) return 0;
+    if (remainder_ms >= step_ms) return scale;
+    return (remainder_ms * scale) / step_ms;
+}
+
+static inline int64_t mako_game_frame_budget_ok(int64_t frame_start_ms, int64_t budget_ms) {
+    if (budget_ms < 0) return 0;
+    return mako_now_ms() - frame_start_ms <= budget_ms ? 1 : 0;
+}
+
+/* ---- Deterministic simulation helpers ---- */
+static inline int64_t mako_fx_from_int(int64_t value, int64_t scale) {
+    if (scale <= 0) return 0;
+    return value * scale;
+}
+
+static inline int64_t mako_fx_to_int(int64_t value, int64_t scale) {
+    if (scale <= 0) return 0;
+    return value / scale;
+}
+
+static inline int64_t mako_fx_mul(int64_t a, int64_t b, int64_t scale) {
+    if (scale <= 0) return 0;
+#if defined(__SIZEOF_INT128__)
+    return (int64_t)(((__int128)a * (__int128)b) / (__int128)scale);
+#else
+    return (a * b) / scale;
+#endif
+}
+
+static inline int64_t mako_fx_div(int64_t a, int64_t b, int64_t scale) {
+    if (scale <= 0 || b == 0) return 0;
+#if defined(__SIZEOF_INT128__)
+    return (int64_t)(((__int128)a * (__int128)scale) / (__int128)b);
+#else
+    return (a * scale) / b;
+#endif
+}
+
+static inline int64_t mako_deterministic_rng_next(int64_t state) {
+    uint64_t x = (uint64_t)state;
+    if (x == 0) x = 0x9E3779B97F4A7C15ULL;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    return (int64_t)(x * 2685821657736338717ULL);
+}
+
+static inline int64_t mako_deterministic_rng_range(int64_t state, int64_t max) {
+    if (max <= 0) return 0;
+    uint64_t next = (uint64_t)mako_deterministic_rng_next(state);
+    return (int64_t)(next % (uint64_t)max);
+}
+
+static inline MakoString mako_replay_append(MakoString stream, int64_t tick, int64_t input) {
+    size_t cap = stream.len + 96;
+    char *d = (char *)malloc(cap);
+    if (!d) mako_abort("replay_append: out of memory");
+    if (stream.len && stream.data) memcpy(d, stream.data, stream.len);
+    int n = snprintf(
+        d + stream.len,
+        cap - stream.len,
+        "%lld:%lld\n",
+        (long long)tick,
+        (long long)input
+    );
+    if (n < 0) n = 0;
+    return (MakoString){d, stream.len + (size_t)n};
+}
+
+static inline int64_t mako_replay_input(MakoString stream, int64_t tick) {
+    if (!stream.data || stream.len == 0) return 0;
+    char *copy = (char *)malloc(stream.len + 1);
+    if (!copy) mako_abort("replay_input: out of memory");
+    memcpy(copy, stream.data, stream.len);
+    copy[stream.len] = 0;
+
+    int64_t found = 0;
+    char *line = copy;
+    while (*line) {
+        char *next_line = strchr(line, '\n');
+        if (next_line) *next_line = 0;
+
+        char *end_tick = NULL;
+        long long parsed_tick = strtoll(line, &end_tick, 10);
+        if (end_tick && *end_tick == ':') {
+            char *end_input = NULL;
+            long long parsed_input = strtoll(end_tick + 1, &end_input, 10);
+            if (end_input != end_tick + 1 && parsed_tick == (long long)tick) {
+                found = (int64_t)parsed_input;
+            }
+        }
+
+        if (!next_line) break;
+        line = next_line + 1;
+    }
+    free(copy);
+    return found;
+}
+
+/* ---- Ring buffers, SPSC queue seed, and scatter/gather helpers ---- */
+#define MAKO_RING_MAX 64
+
+typedef struct {
+    int64_t *data;
+    int64_t cap;
+    atomic_llong head;
+    atomic_llong tail;
+} MakoRing;
+
+static MakoRing mako_rings[MAKO_RING_MAX];
+static atomic_llong mako_ring_next_id = 0;
+
+static inline MakoRing *mako_ring_get(int64_t id) {
+    if (id <= 0 || id > MAKO_RING_MAX) return NULL;
+    MakoRing *r = &mako_rings[id - 1];
+    if (!r->data || r->cap <= 0) return NULL;
+    return r;
+}
+
+static inline int64_t mako_ring_new(int64_t cap) {
+    if (cap <= 0) return 0;
+    if (cap > 1048576) cap = 1048576;
+    long long slot = atomic_fetch_add_explicit(&mako_ring_next_id, 1, memory_order_relaxed);
+    if (slot < 0 || slot >= MAKO_RING_MAX) return 0;
+    int64_t *data = (int64_t *)calloc((size_t)cap, sizeof(int64_t));
+    if (!data) mako_abort("ring_new: out of memory");
+    MakoRing *r = &mako_rings[slot];
+    r->data = data;
+    r->cap = cap;
+    atomic_store_explicit(&r->head, 0, memory_order_relaxed);
+    atomic_store_explicit(&r->tail, 0, memory_order_relaxed);
+    return (int64_t)slot + 1;
+}
+
+static inline int64_t mako_ring_len(int64_t id) {
+    MakoRing *r = mako_ring_get(id);
+    if (!r) return 0;
+    long long head = atomic_load_explicit(&r->head, memory_order_acquire);
+    long long tail = atomic_load_explicit(&r->tail, memory_order_acquire);
+    long long len = tail - head;
+    if (len < 0) return 0;
+    return len > r->cap ? r->cap : (int64_t)len;
+}
+
+static inline int64_t mako_ring_cap(int64_t id) {
+    MakoRing *r = mako_ring_get(id);
+    return r ? r->cap : 0;
+}
+
+static inline int64_t mako_ring_push(int64_t id, int64_t value) {
+    MakoRing *r = mako_ring_get(id);
+    if (!r) return 0;
+    long long tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
+    long long head = atomic_load_explicit(&r->head, memory_order_acquire);
+    if (tail - head >= r->cap) return 0;
+    r->data[tail % r->cap] = value;
+    atomic_store_explicit(&r->tail, tail + 1, memory_order_release);
+    return 1;
+}
+
+static inline int64_t mako_ring_pop(int64_t id) {
+    MakoRing *r = mako_ring_get(id);
+    if (!r) return 0;
+    long long head = atomic_load_explicit(&r->head, memory_order_relaxed);
+    long long tail = atomic_load_explicit(&r->tail, memory_order_acquire);
+    if (tail <= head) return 0;
+    int64_t value = r->data[head % r->cap];
+    atomic_store_explicit(&r->head, head + 1, memory_order_release);
+    return value;
+}
+
+static inline int64_t mako_ring_peek(int64_t id) {
+    MakoRing *r = mako_ring_get(id);
+    if (!r) return 0;
+    long long head = atomic_load_explicit(&r->head, memory_order_acquire);
+    long long tail = atomic_load_explicit(&r->tail, memory_order_acquire);
+    if (tail <= head) return 0;
+    return r->data[head % r->cap];
+}
+
+static inline int64_t mako_lfq_new(int64_t cap) {
+    return mako_ring_new(cap);
+}
+
+static inline int64_t mako_lfq_try_push(int64_t id, int64_t value) {
+    return mako_ring_push(id, value);
+}
+
+static inline int64_t mako_lfq_try_pop(int64_t id) {
+    return mako_ring_pop(id);
+}
+
+static inline int64_t mako_lfq_len(int64_t id) {
+    return mako_ring_len(id);
+}
+
+static inline MakoString mako_sg_gather2(MakoString a, MakoString b) {
+    size_t len = a.len + b.len;
+    char *d = (char *)malloc(len + 1);
+    if (!d) mako_abort("sg_gather2: out of memory");
+    if (a.len && a.data) memcpy(d, a.data, a.len);
+    if (b.len && b.data) memcpy(d + a.len, b.data, b.len);
+    d[len] = 0;
+    return (MakoString){d, len};
+}
+
+static inline MakoString mako_sg_gather3(MakoString a, MakoString b, MakoString c) {
+    size_t len = a.len + b.len + c.len;
+    char *d = (char *)malloc(len + 1);
+    if (!d) mako_abort("sg_gather3: out of memory");
+    size_t off = 0;
+    if (a.len && a.data) {
+        memcpy(d + off, a.data, a.len);
+        off += a.len;
+    }
+    if (b.len && b.data) {
+        memcpy(d + off, b.data, b.len);
+        off += b.len;
+    }
+    if (c.len && c.data) memcpy(d + off, c.data, c.len);
+    d[len] = 0;
+    return (MakoString){d, len};
+}
+
+static inline MakoString mako_sg_slice(MakoString s, int64_t offset, int64_t len) {
+    if (offset < 0) offset = 0;
+    if (len < 0) len = 0;
+    if ((size_t)offset > s.len) offset = (int64_t)s.len;
+    size_t end = (size_t)offset + (size_t)len;
+    if (end > s.len) end = s.len;
+    return mako_str_slice(s, offset, (int64_t)end);
+}
+
+/* ---- Finite-state-machine helpers for session systems ---- */
+static inline MakoString mako_fsm_rule(MakoString from, MakoString event, MakoString to) {
+    size_t len = from.len + event.len + to.len + 3;
+    char *d = (char *)malloc(len + 1);
+    if (!d) mako_abort("fsm_rule: out of memory");
+    size_t off = 0;
+    if (from.len && from.data) {
+        memcpy(d + off, from.data, from.len);
+        off += from.len;
+    }
+    d[off++] = ':';
+    if (event.len && event.data) {
+        memcpy(d + off, event.data, event.len);
+        off += event.len;
+    }
+    d[off++] = '>';
+    if (to.len && to.data) {
+        memcpy(d + off, to.data, to.len);
+        off += to.len;
+    }
+    d[off++] = ';';
+    d[off] = 0;
+    return (MakoString){d, off};
+}
+
+static inline int64_t mako_fsm_is(MakoString state, MakoString expected) {
+    return mako_str_eq(state, expected);
+}
+
+static inline int64_t mako_fsm_match_rule(
+    MakoString rules,
+    size_t start,
+    size_t end,
+    MakoString current,
+    MakoString event,
+    size_t *to_start,
+    size_t *to_len
+) {
+    const char *r = rules.data ? rules.data : "";
+    size_t colon = end;
+    size_t arrow = end;
+    for (size_t i = start; i < end; i++) {
+        if (r[i] == ':' && colon == end) colon = i;
+        if (r[i] == '>' && colon != end) {
+            arrow = i;
+            break;
+        }
+    }
+    if (colon == end || arrow == end || arrow < colon) return 0;
+    size_t from_len = colon - start;
+    size_t event_len = arrow - colon - 1;
+    size_t next_len = end - arrow - 1;
+    if (from_len != current.len || event_len != event.len) return 0;
+    if (from_len && memcmp(r + start, current.data, from_len) != 0) return 0;
+    if (event_len && memcmp(r + colon + 1, event.data, event_len) != 0) return 0;
+    *to_start = arrow + 1;
+    *to_len = next_len;
+    return 1;
+}
+
+static inline int64_t mako_fsm_can(MakoString current, MakoString event, MakoString rules) {
+    if (!rules.data || rules.len == 0) return 0;
+    size_t start = 0;
+    while (start <= rules.len) {
+        size_t end = start;
+        while (end < rules.len && rules.data[end] != ';') end++;
+        if (end > start) {
+            size_t to_start = 0;
+            size_t to_len = 0;
+            if (mako_fsm_match_rule(rules, start, end, current, event, &to_start, &to_len)) {
+                return 1;
+            }
+        }
+        if (end >= rules.len) break;
+        start = end + 1;
+    }
+    return 0;
+}
+
+static inline MakoString mako_fsm_transition(MakoString current, MakoString event, MakoString rules) {
+    if (!rules.data || rules.len == 0) return mako_str_slice(current, 0, (int64_t)current.len);
+    size_t start = 0;
+    while (start <= rules.len) {
+        size_t end = start;
+        while (end < rules.len && rules.data[end] != ';') end++;
+        if (end > start) {
+            size_t to_start = 0;
+            size_t to_len = 0;
+            if (mako_fsm_match_rule(rules, start, end, current, event, &to_start, &to_len)) {
+                return mako_str_slice(rules, (int64_t)to_start, (int64_t)(to_start + to_len));
+            }
+        }
+        if (end >= rules.len) break;
+        start = end + 1;
+    }
+    return mako_str_slice(current, 0, (int64_t)current.len);
+}
+
+/* ---- Game frame allocators, object pools, and allocation tracking ---- */
+#define MAKO_FRAME_ALLOC_MAX 64
+#define MAKO_OBJECT_POOL_MAX 64
+
+typedef struct {
+    unsigned char *data;
+    int64_t cap;
+    int64_t used;
+} MakoFrameAlloc;
+
+typedef struct {
+    int64_t cap;
+    int64_t free_count;
+    int64_t *free_stack;
+    unsigned char *in_use;
+} MakoObjectPool;
+
+static MakoFrameAlloc mako_frame_allocs[MAKO_FRAME_ALLOC_MAX];
+static MakoObjectPool mako_object_pools[MAKO_OBJECT_POOL_MAX];
+static atomic_llong mako_frame_alloc_next_id = 0;
+static atomic_llong mako_object_pool_next_id = 0;
+static atomic_llong mako_alloc_track_live = 0;
+static atomic_llong mako_alloc_track_high = 0;
+
+static inline void mako_alloc_track_observe(long long live) {
+    long long old = atomic_load_explicit(&mako_alloc_track_high, memory_order_relaxed);
+    while (live > old
+           && !atomic_compare_exchange_weak_explicit(
+               &mako_alloc_track_high,
+               &old,
+               live,
+               memory_order_relaxed,
+               memory_order_relaxed
+           )) {
+    }
+}
+
+static inline int64_t mako_alloc_track_reset(void) {
+    atomic_store_explicit(&mako_alloc_track_live, 0, memory_order_relaxed);
+    atomic_store_explicit(&mako_alloc_track_high, 0, memory_order_relaxed);
+    return 1;
+}
+
+static inline int64_t mako_alloc_track_alloc(int64_t bytes) {
+    if (bytes <= 0) return atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed);
+    long long live = atomic_fetch_add_explicit(&mako_alloc_track_live, bytes, memory_order_relaxed) + bytes;
+    mako_alloc_track_observe(live);
+    return live;
+}
+
+static inline int64_t mako_alloc_track_free(int64_t bytes) {
+    if (bytes <= 0) return atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed);
+    long long old = atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed);
+    while (1) {
+        long long next = old - bytes;
+        if (next < 0) next = 0;
+        if (atomic_compare_exchange_weak_explicit(
+                &mako_alloc_track_live,
+                &old,
+                next,
+                memory_order_relaxed,
+                memory_order_relaxed
+            )) {
+            return next;
+        }
+    }
+}
+
+static inline int64_t mako_alloc_track_live_bytes(void) {
+    return atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed);
+}
+
+static inline int64_t mako_alloc_track_high_bytes(void) {
+    return atomic_load_explicit(&mako_alloc_track_high, memory_order_relaxed);
+}
+
+static inline MakoString mako_alloc_track_report_json(void) {
+    char *d = (char *)malloc(96);
+    if (!d) mako_abort("alloc_track_report_json: out of memory");
+    int n = snprintf(
+        d,
+        96,
+        "{\"live_bytes\":%lld,\"high_water_bytes\":%lld}",
+        atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed),
+        atomic_load_explicit(&mako_alloc_track_high, memory_order_relaxed)
+    );
+    if (n < 0) n = 0;
+    return (MakoString){d, (size_t)n};
+}
+
+static inline int64_t mako_leak_mark(void) {
+    return atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed);
+}
+
+static inline int64_t mako_leak_bytes_since(int64_t mark) {
+    long long live = atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed);
+    long long leaked = live - mark;
+    return leaked > 0 ? leaked : 0;
+}
+
+static inline int64_t mako_leak_detected(int64_t mark) {
+    return mako_leak_bytes_since(mark) > 0 ? 1 : 0;
+}
+
+static inline int64_t mako_leak_assert_clear(int64_t mark) {
+    return mako_leak_detected(mark) ? 0 : 1;
+}
+
+static inline MakoString mako_leak_report_json(int64_t mark) {
+    long long live = atomic_load_explicit(&mako_alloc_track_live, memory_order_relaxed);
+    long long high = atomic_load_explicit(&mako_alloc_track_high, memory_order_relaxed);
+    long long leaked = live - mark;
+    if (leaked < 0) leaked = 0;
+    char *d = (char *)malloc(144);
+    if (!d) mako_abort("leak_report_json: out of memory");
+    int n = snprintf(
+        d,
+        144,
+        "{\"mark_bytes\":%lld,\"live_bytes\":%lld,\"leaked_bytes\":%lld,\"high_water_bytes\":%lld,\"leak_detected\":%lld}",
+        (long long)mark,
+        live,
+        leaked,
+        high,
+        leaked > 0 ? 1LL : 0LL
+    );
+    if (n < 0) n = 0;
+    return (MakoString){d, (size_t)n};
+}
+
+static inline MakoFrameAlloc *mako_frame_alloc_get(int64_t id) {
+    if (id <= 0 || id > MAKO_FRAME_ALLOC_MAX) return NULL;
+    MakoFrameAlloc *a = &mako_frame_allocs[id - 1];
+    if (!a->data || a->cap <= 0) return NULL;
+    return a;
+}
+
+static inline int64_t mako_frame_alloc_new(int64_t cap) {
+    if (cap <= 0) return 0;
+    if (cap > 1048576 * 64LL) cap = 1048576 * 64LL;
+    long long slot = atomic_fetch_add_explicit(&mako_frame_alloc_next_id, 1, memory_order_relaxed);
+    if (slot < 0 || slot >= MAKO_FRAME_ALLOC_MAX) return 0;
+    unsigned char *data = (unsigned char *)malloc((size_t)cap);
+    if (!data) mako_abort("frame_alloc_new: out of memory");
+    MakoFrameAlloc *a = &mako_frame_allocs[slot];
+    a->data = data;
+    a->cap = cap;
+    a->used = 0;
+    mako_alloc_track_alloc(cap);
+    return (int64_t)slot + 1;
+}
+
+static inline int64_t mako_frame_alloc(int64_t id, int64_t bytes) {
+    MakoFrameAlloc *a = mako_frame_alloc_get(id);
+    if (!a || bytes <= 0) return -1;
+    if (a->used + bytes > a->cap) return -1;
+    int64_t off = a->used;
+    a->used += bytes;
+    return off;
+}
+
+static inline int64_t mako_frame_reset(int64_t id) {
+    MakoFrameAlloc *a = mako_frame_alloc_get(id);
+    if (!a) return 0;
+    a->used = 0;
+    return 1;
+}
+
+static inline int64_t mako_frame_used(int64_t id) {
+    MakoFrameAlloc *a = mako_frame_alloc_get(id);
+    return a ? a->used : 0;
+}
+
+static inline int64_t mako_frame_cap(int64_t id) {
+    MakoFrameAlloc *a = mako_frame_alloc_get(id);
+    return a ? a->cap : 0;
+}
+
+static inline MakoObjectPool *mako_object_pool_get(int64_t id) {
+    if (id <= 0 || id > MAKO_OBJECT_POOL_MAX) return NULL;
+    MakoObjectPool *p = &mako_object_pools[id - 1];
+    if (!p->free_stack || !p->in_use || p->cap <= 0) return NULL;
+    return p;
+}
+
+static inline int64_t mako_obj_pool_new(int64_t cap) {
+    if (cap <= 0) return 0;
+    if (cap > 1048576) cap = 1048576;
+    long long slot = atomic_fetch_add_explicit(&mako_object_pool_next_id, 1, memory_order_relaxed);
+    if (slot < 0 || slot >= MAKO_OBJECT_POOL_MAX) return 0;
+    int64_t *stack = (int64_t *)malloc((size_t)cap * sizeof(int64_t));
+    unsigned char *in_use = (unsigned char *)calloc((size_t)cap + 1, 1);
+    if (!stack || !in_use) mako_abort("obj_pool_new: out of memory");
+    for (int64_t i = 0; i < cap; i++) stack[i] = cap - i;
+    MakoObjectPool *p = &mako_object_pools[slot];
+    p->cap = cap;
+    p->free_count = cap;
+    p->free_stack = stack;
+    p->in_use = in_use;
+    mako_alloc_track_alloc(cap * (int64_t)sizeof(int64_t) + cap + 1);
+    return (int64_t)slot + 1;
+}
+
+static inline int64_t mako_obj_acquire(int64_t id) {
+    MakoObjectPool *p = mako_object_pool_get(id);
+    if (!p || p->free_count <= 0) return 0;
+    int64_t obj = p->free_stack[--p->free_count];
+    if (obj <= 0 || obj > p->cap) return 0;
+    p->in_use[obj] = 1;
+    return obj;
+}
+
+static inline int64_t mako_obj_release(int64_t id, int64_t obj) {
+    MakoObjectPool *p = mako_object_pool_get(id);
+    if (!p || obj <= 0 || obj > p->cap || !p->in_use[obj]) return 0;
+    p->in_use[obj] = 0;
+    p->free_stack[p->free_count++] = obj;
+    return 1;
+}
+
+static inline int64_t mako_obj_available(int64_t id) {
+    MakoObjectPool *p = mako_object_pool_get(id);
+    return p ? p->free_count : 0;
+}
+
+static inline int64_t mako_obj_pool_cap(int64_t id) {
+    MakoObjectPool *p = mako_object_pool_get(id);
+    return p ? p->cap : 0;
+}
+
+/* ---- ECS seed: entities, components, systems, archetype/query basics ---- */
+#define MAKO_ECS_WORLD_MAX 32
+#define MAKO_ECS_COMPONENT_MAX 64
+
+typedef struct {
+    int64_t cap;
+    int64_t next_entity;
+    unsigned char *alive;
+    unsigned char *present;
+    int64_t *values;
+} MakoEcsWorld;
+
+static MakoEcsWorld mako_ecs_worlds[MAKO_ECS_WORLD_MAX];
+static atomic_llong mako_ecs_world_next_id = 0;
+
+static inline MakoEcsWorld *mako_ecs_world_get(int64_t id) {
+    if (id <= 0 || id > MAKO_ECS_WORLD_MAX) return NULL;
+    MakoEcsWorld *w = &mako_ecs_worlds[id - 1];
+    if (!w->alive || !w->present || !w->values || w->cap <= 0) return NULL;
+    return w;
+}
+
+static inline int64_t mako_ecs_index(MakoEcsWorld *w, int64_t entity, int64_t component) {
+    if (!w || entity <= 0 || entity > w->cap) return -1;
+    if (component <= 0 || component >= MAKO_ECS_COMPONENT_MAX) return -1;
+    return entity * MAKO_ECS_COMPONENT_MAX + component;
+}
+
+static inline int64_t mako_ecs_world_new(int64_t cap) {
+    if (cap <= 0) return 0;
+    if (cap > 1048576) cap = 1048576;
+    long long slot = atomic_fetch_add_explicit(&mako_ecs_world_next_id, 1, memory_order_relaxed);
+    if (slot < 0 || slot >= MAKO_ECS_WORLD_MAX) return 0;
+    size_t rows = (size_t)cap + 1;
+    unsigned char *alive = (unsigned char *)calloc(rows, 1);
+    unsigned char *present = (unsigned char *)calloc(rows * MAKO_ECS_COMPONENT_MAX, 1);
+    int64_t *values = (int64_t *)calloc(rows * MAKO_ECS_COMPONENT_MAX, sizeof(int64_t));
+    if (!alive || !present || !values) mako_abort("ecs_world_new: out of memory");
+    MakoEcsWorld *w = &mako_ecs_worlds[slot];
+    w->cap = cap;
+    w->next_entity = 1;
+    w->alive = alive;
+    w->present = present;
+    w->values = values;
+    mako_alloc_track_alloc(
+        (int64_t)rows
+        + (int64_t)(rows * MAKO_ECS_COMPONENT_MAX)
+        + (int64_t)(rows * MAKO_ECS_COMPONENT_MAX * sizeof(int64_t))
+    );
+    return (int64_t)slot + 1;
+}
+
+static inline int64_t mako_ecs_spawn(int64_t world) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    if (!w) return 0;
+    for (int64_t i = w->next_entity; i <= w->cap; i++) {
+        if (!w->alive[i]) {
+            w->alive[i] = 1;
+            w->next_entity = i + 1;
+            return i;
+        }
+    }
+    for (int64_t i = 1; i < w->next_entity && i <= w->cap; i++) {
+        if (!w->alive[i]) {
+            w->alive[i] = 1;
+            w->next_entity = i + 1;
+            return i;
+        }
+    }
+    return 0;
+}
+
+static inline int64_t mako_ecs_alive(int64_t world, int64_t entity) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    if (!w || entity <= 0 || entity > w->cap) return 0;
+    return w->alive[entity] ? 1 : 0;
+}
+
+static inline int64_t mako_ecs_despawn(int64_t world, int64_t entity) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    if (!w || entity <= 0 || entity > w->cap || !w->alive[entity]) return 0;
+    w->alive[entity] = 0;
+    memset(
+        w->present + (size_t)entity * MAKO_ECS_COMPONENT_MAX,
+        0,
+        MAKO_ECS_COMPONENT_MAX
+    );
+    memset(
+        w->values + (size_t)entity * MAKO_ECS_COMPONENT_MAX,
+        0,
+        MAKO_ECS_COMPONENT_MAX * sizeof(int64_t)
+    );
+    if (entity < w->next_entity) w->next_entity = entity;
+    return 1;
+}
+
+static inline int64_t mako_ecs_add(int64_t world, int64_t entity, int64_t component, int64_t value) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    int64_t idx = mako_ecs_index(w, entity, component);
+    if (idx < 0 || !w->alive[entity]) return 0;
+    w->present[idx] = 1;
+    w->values[idx] = value;
+    return 1;
+}
+
+static inline int64_t mako_ecs_set(int64_t world, int64_t entity, int64_t component, int64_t value) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    int64_t idx = mako_ecs_index(w, entity, component);
+    if (idx < 0 || !w->alive[entity] || !w->present[idx]) return 0;
+    w->values[idx] = value;
+    return 1;
+}
+
+static inline int64_t mako_ecs_has(int64_t world, int64_t entity, int64_t component) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    int64_t idx = mako_ecs_index(w, entity, component);
+    if (idx < 0 || !w->alive[entity]) return 0;
+    return w->present[idx] ? 1 : 0;
+}
+
+static inline int64_t mako_ecs_get(int64_t world, int64_t entity, int64_t component) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    int64_t idx = mako_ecs_index(w, entity, component);
+    if (idx < 0 || !w->alive[entity] || !w->present[idx]) return 0;
+    return w->values[idx];
+}
+
+static inline int64_t mako_ecs_remove(int64_t world, int64_t entity, int64_t component) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    int64_t idx = mako_ecs_index(w, entity, component);
+    if (idx < 0 || !w->alive[entity] || !w->present[idx]) return 0;
+    w->present[idx] = 0;
+    w->values[idx] = 0;
+    return 1;
+}
+
+static inline int64_t mako_ecs_query_count(int64_t world, int64_t component) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    if (!w || component <= 0 || component >= MAKO_ECS_COMPONENT_MAX) return 0;
+    int64_t count = 0;
+    for (int64_t entity = 1; entity <= w->cap; entity++) {
+        int64_t idx = entity * MAKO_ECS_COMPONENT_MAX + component;
+        if (w->alive[entity] && w->present[idx]) count++;
+    }
+    return count;
+}
+
+static inline int64_t mako_ecs_query_first(int64_t world, int64_t component) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    if (!w || component <= 0 || component >= MAKO_ECS_COMPONENT_MAX) return 0;
+    for (int64_t entity = 1; entity <= w->cap; entity++) {
+        int64_t idx = entity * MAKO_ECS_COMPONENT_MAX + component;
+        if (w->alive[entity] && w->present[idx]) return entity;
+    }
+    return 0;
+}
+
+static inline int64_t mako_ecs_archetype(int64_t world, int64_t entity) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    if (!w || entity <= 0 || entity > w->cap || !w->alive[entity]) return 0;
+    uint64_t mask = 0;
+    for (int64_t component = 1; component < MAKO_ECS_COMPONENT_MAX && component < 63; component++) {
+        int64_t idx = entity * MAKO_ECS_COMPONENT_MAX + component;
+        if (w->present[idx]) mask |= (uint64_t)1 << (uint64_t)component;
+    }
+    return (int64_t)mask;
+}
+
+static inline int64_t mako_ecs_system_add(int64_t world, int64_t component, int64_t delta) {
+    MakoEcsWorld *w = mako_ecs_world_get(world);
+    if (!w || component <= 0 || component >= MAKO_ECS_COMPONENT_MAX) return 0;
+    int64_t count = 0;
+    for (int64_t entity = 1; entity <= w->cap; entity++) {
+        int64_t idx = entity * MAKO_ECS_COMPONENT_MAX + component;
+        if (w->alive[entity] && w->present[idx]) {
+            w->values[idx] += delta;
+            count++;
+        }
+    }
+    return count;
+}
+
+/* ---- Cookies, sessions, CSRF ---- */
+static inline MakoString mako_cookie_get(MakoString header, MakoString name) {
+    const char *h = header.data ? header.data : "";
+    size_t pos = 0;
+    while (pos < header.len) {
+        while (pos < header.len && (h[pos] == ' ' || h[pos] == ';')) pos++;
+        size_t key_start = pos;
+        while (pos < header.len && h[pos] != '=' && h[pos] != ';') pos++;
+        size_t key_len = pos - key_start;
+        if (pos < header.len && h[pos] == '=') {
+            pos++;
+            size_t val_start = pos;
+            while (pos < header.len && h[pos] != ';') pos++;
+            size_t val_len = pos - val_start;
+            if (key_len == name.len && memcmp(h + key_start, name.data, name.len) == 0) {
+                char *d = (char *)malloc(val_len + 1);
+                if (!d) mako_abort("cookie_get: out of memory");
+                if (val_len) memcpy(d, h + val_start, val_len);
+                d[val_len] = 0;
+                return (MakoString){d, val_len};
+            }
+        }
+        while (pos < header.len && h[pos] != ';') pos++;
+    }
+    return mako_str_from_cstr("");
+}
+
+static inline MakoString mako_cookie_make(MakoString name, MakoString value, int64_t max_age) {
+    size_t cap = name.len + value.len + 96;
+    char *d = (char *)malloc(cap);
+    if (!d) mako_abort("cookie_make: out of memory");
+    int n = snprintf(
+        d,
+        cap,
+        "%.*s=%.*s; Max-Age=%lld; Path=/; HttpOnly; SameSite=Lax",
+        (int)name.len,
+        name.data ? name.data : "",
+        (int)value.len,
+        value.data ? value.data : "",
+        (long long)max_age
+    );
+    if (n < 0) n = 0;
+    return (MakoString){d, (size_t)n};
+}
+
+static inline MakoString mako_session_id_new(void) {
+    MakoString raw = mako_random_bytes(16);
+    char *d = (char *)malloc(raw.len * 2 + 1);
+    if (!d) mako_abort("session_id_new: out of memory");
+    for (size_t i = 0; i < raw.len; i++) {
+        snprintf(d + i * 2, 3, "%02x", (unsigned char)raw.data[i]);
+    }
+    d[raw.len * 2] = 0;
+    MakoString out = {d, raw.len * 2};
+    free(raw.data);
+    return out;
+}
+
+static inline MakoString mako_csrf_token(void) {
+    return mako_session_id_new();
+}
+
+static inline int64_t mako_csrf_check(MakoString expected, MakoString submitted) {
+    return mako_const_eq(expected, submitted);
+}
+
+static inline MakoString mako_hmac_sha256_hex(MakoString key, MakoString msg);
+
+/* ---- Authentication and authorization helpers ---- */
+static inline int mako_auth_prefix_eq(MakoString s, const char *prefix) {
+    size_t n = strlen(prefix);
+    return s.data && s.len >= n && memcmp(s.data, prefix, n) == 0;
+}
+
+static inline MakoString mako_auth_bearer(MakoString authorization) {
+    const char *p = "Bearer ";
+    size_t n = strlen(p);
+    if (!mako_auth_prefix_eq(authorization, p)) return mako_str_from_cstr("");
+    size_t start = n;
+    while (start < authorization.len && authorization.data[start] == ' ') start++;
+    size_t end = authorization.len;
+    while (end > start && (authorization.data[end - 1] == ' ' || authorization.data[end - 1] == '\t')) end--;
+    return mako_str_slice(authorization, (int64_t)start, (int64_t)end);
+}
+
+static inline int64_t mako_auth_check_bearer(MakoString authorization, MakoString expected_token) {
+    MakoString got = mako_auth_bearer(authorization);
+    return mako_const_eq(got, expected_token);
+}
+
+static inline MakoString mako_auth_basic_header(MakoString user, MakoString pass) {
+    size_t raw_len = user.len + pass.len + 1;
+    char *raw = (char *)malloc(raw_len + 1);
+    if (!raw) mako_abort("auth_basic_header: out of memory");
+    size_t pos = 0;
+    if (user.len) memcpy(raw + pos, user.data, user.len);
+    pos += user.len;
+    raw[pos++] = ':';
+    if (pass.len) memcpy(raw + pos, pass.data, pass.len);
+    pos += pass.len;
+    raw[pos] = 0;
+    MakoString b64 = mako_base64_encode((MakoString){raw, raw_len});
+    free(raw);
+    size_t out_len = 6 + b64.len;
+    char *out = (char *)malloc(out_len + 1);
+    if (!out) mako_abort("auth_basic_header: out of memory");
+    memcpy(out, "Basic ", 6);
+    memcpy(out + 6, b64.data, b64.len);
+    out[out_len] = 0;
+    return (MakoString){out, out_len};
+}
+
+static inline int64_t mako_auth_check_basic(MakoString authorization, MakoString user, MakoString pass) {
+    MakoString expected = mako_auth_basic_header(user, pass);
+    return mako_const_eq(authorization, expected);
+}
+
+static inline int mako_auth_csv_contains(MakoString csv, MakoString item) {
+    if (!csv.data || !item.data || item.len == 0) return 0;
+    size_t i = 0;
+    while (i <= csv.len) {
+        while (i < csv.len && (csv.data[i] == ' ' || csv.data[i] == '\t' || csv.data[i] == ',')) i++;
+        size_t start = i;
+        while (i < csv.len && csv.data[i] != ',') i++;
+        size_t end = i;
+        while (end > start && (csv.data[end - 1] == ' ' || csv.data[end - 1] == '\t')) end--;
+        if (end - start == item.len && memcmp(csv.data + start, item.data, item.len) == 0) return 1;
+        if (i >= csv.len) break;
+        i++;
+    }
+    return 0;
+}
+
+static inline int64_t mako_auth_role_has(MakoString roles_csv, MakoString role) {
+    return mako_auth_csv_contains(roles_csv, role) ? 1 : 0;
+}
+
+static inline int64_t mako_authz_allow_role(MakoString user_roles_csv, MakoString required_roles_csv) {
+    if (!required_roles_csv.data || required_roles_csv.len == 0) return 1;
+    size_t i = 0;
+    while (i <= required_roles_csv.len) {
+        while (i < required_roles_csv.len &&
+               (required_roles_csv.data[i] == ' ' || required_roles_csv.data[i] == '\t' ||
+                required_roles_csv.data[i] == ',')) i++;
+        size_t start = i;
+        while (i < required_roles_csv.len && required_roles_csv.data[i] != ',') i++;
+        size_t end = i;
+        while (end > start &&
+               (required_roles_csv.data[end - 1] == ' ' || required_roles_csv.data[end - 1] == '\t')) end--;
+        if (end > start) {
+            MakoString role = {required_roles_csv.data + start, end - start};
+            if (mako_auth_csv_contains(user_roles_csv, role)) return 1;
+        }
+        if (i >= required_roles_csv.len) break;
+        i++;
+    }
+    return 0;
+}
+
+static inline MakoString mako_auth_token_sign(MakoString subject, MakoString secret) {
+    MakoString sig = mako_hmac_sha256_hex(secret, subject);
+    size_t out_len = subject.len + 1 + sig.len;
+    char *out = (char *)malloc(out_len + 1);
+    if (!out) mako_abort("auth_token_sign: out of memory");
+    size_t pos = 0;
+    if (subject.len) memcpy(out + pos, subject.data, subject.len);
+    pos += subject.len;
+    out[pos++] = '.';
+    memcpy(out + pos, sig.data, sig.len);
+    pos += sig.len;
+    out[pos] = 0;
+    return (MakoString){out, pos};
+}
+
+static inline MakoString mako_auth_token_subject(MakoString token) {
+    if (!token.data) return mako_str_from_cstr("");
+    for (size_t i = 0; i < token.len; i++) {
+        if (token.data[i] == '.') return mako_str_slice(token, 0, (int64_t)i);
+    }
+    return mako_str_from_cstr("");
+}
+
+static inline int64_t mako_auth_token_check(MakoString token, MakoString secret) {
+    MakoString subject = mako_auth_token_subject(token);
+    if (!subject.data || subject.len == 0) return 0;
+    MakoString expected = mako_auth_token_sign(subject, secret);
+    return mako_const_eq(token, expected);
+}
+
+static inline int64_t mako_auth_session_cookie(MakoString cookie_header, MakoString cookie_name, MakoString expected) {
+    MakoString got = mako_cookie_get(cookie_header, cookie_name);
+    return mako_const_eq(got, expected);
+}
+
+/* ---- Backend rate limiting, compression negotiation, and TTL cache ---- */
+#define MAKO_BACKEND_SLOTS 128
+
+typedef struct {
+    int used;
+    uint64_t hash;
+    char *key;
+    size_t key_len;
+    int64_t window_start_ms;
+    int64_t count;
+} MakoRateSlot;
+
+typedef struct {
+    int used;
+    uint64_t hash;
+    char *key;
+    size_t key_len;
+    char *value;
+    size_t value_len;
+    int64_t expires_ms;
+} MakoCacheSlot;
+
+typedef struct {
+    int used;
+    uint64_t hash;
+    char *name;
+    size_t name_len;
+    int64_t due_ms;
+} MakoJobSlot;
+
+static MakoRateSlot mako_rate_slots[MAKO_BACKEND_SLOTS];
+static MakoCacheSlot mako_cache_slots[MAKO_BACKEND_SLOTS];
+static MakoJobSlot mako_job_slots[MAKO_BACKEND_SLOTS];
+
+static inline char *mako_backend_dup(const char *p, size_t n) {
+    char *d = (char *)malloc(n + 1);
+    if (!d) mako_abort("backend helper: out of memory");
+    if (n) memcpy(d, p ? p : "", n);
+    d[n] = 0;
+    return d;
+}
+
+static inline int mako_backend_key_eq(uint64_t hash, const char *key, size_t key_len, MakoString s) {
+    return hash == mako_hash_bytes(s.data ? s.data : "", s.len)
+        && key_len == s.len
+        && (s.len == 0 || memcmp(key, s.data ? s.data : "", s.len) == 0);
+}
+
+static inline int64_t mako_rate_allow(MakoString key, int64_t limit, int64_t window_ms) {
+    if (limit <= 0) return 0;
+    if (window_ms <= 0) window_ms = 1000;
+    const char *k = key.data ? key.data : "";
+    uint64_t h = mako_hash_bytes(k, key.len);
+    size_t start = (size_t)(h % MAKO_BACKEND_SLOTS);
+    size_t victim = start;
+    int64_t now = mako_now_ms();
+    for (size_t probe = 0; probe < MAKO_BACKEND_SLOTS; probe++) {
+        size_t idx = (start + probe) % MAKO_BACKEND_SLOTS;
+        MakoRateSlot *s = &mako_rate_slots[idx];
+        if (!s->used) {
+            victim = idx;
+            break;
+        }
+        if (mako_backend_key_eq(s->hash, s->key, s->key_len, key)) {
+            if (now - s->window_start_ms >= window_ms) {
+                s->window_start_ms = now;
+                s->count = 0;
+            }
+            if (s->count >= limit) return 0;
+            s->count++;
+            return 1;
+        }
+        if (now - s->window_start_ms >= window_ms) victim = idx;
+    }
+    MakoRateSlot *s = &mako_rate_slots[victim];
+    if (s->used) free(s->key);
+    s->used = 1;
+    s->hash = h;
+    s->key = mako_backend_dup(k, key.len);
+    s->key_len = key.len;
+    s->window_start_ms = now;
+    s->count = 1;
+    return 1;
+}
+
+static inline int64_t mako_rate_remaining(MakoString key, int64_t limit, int64_t window_ms) {
+    if (limit <= 0) return 0;
+    if (window_ms <= 0) window_ms = 1000;
+    uint64_t h = mako_hash_bytes(key.data ? key.data : "", key.len);
+    int64_t now = mako_now_ms();
+    for (size_t i = 0; i < MAKO_BACKEND_SLOTS; i++) {
+        MakoRateSlot *s = &mako_rate_slots[i];
+        if (s->used && mako_backend_key_eq(s->hash, s->key, s->key_len, key)) {
+            if (now - s->window_start_ms >= window_ms) return limit;
+            int64_t left = limit - s->count;
+            return left > 0 ? left : 0;
+        }
+    }
+    return limit;
+}
+
+static inline int mako_contains_gzip(MakoString accept_encoding) {
+    const char *s = accept_encoding.data ? accept_encoding.data : "";
+    for (size_t i = 0; i + 4 <= accept_encoding.len; i++) {
+        char a = s[i], b = s[i + 1], c = s[i + 2], d = s[i + 3];
+        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        if (d >= 'A' && d <= 'Z') d = (char)(d - 'A' + 'a');
+        if (a == 'g' && b == 'z' && c == 'i' && d == 'p') return 1;
+    }
+    return 0;
+}
+
+static inline MakoString mako_http_content_encoding(MakoString accept_encoding) {
+    if (mako_contains_gzip(accept_encoding) && mako_gzip_available() == 1) {
+        return mako_str_from_cstr("gzip");
+    }
+    return mako_str_from_cstr("identity");
+}
+
+static inline MakoString mako_http_compress_if_accepted(MakoString body, MakoString accept_encoding) {
+    if (mako_contains_gzip(accept_encoding) && mako_gzip_available() == 1) {
+        return mako_gzip_compress(body);
+    }
+    char *d = mako_backend_dup(body.data ? body.data : "", body.len);
+    return (MakoString){d, body.len};
+}
+
+static inline int64_t mako_cache_put(MakoString key, MakoString value, int64_t ttl_ms) {
+    const char *k = key.data ? key.data : "";
+    uint64_t h = mako_hash_bytes(k, key.len);
+    size_t start = (size_t)(h % MAKO_BACKEND_SLOTS);
+    size_t victim = start;
+    int64_t now = mako_now_ms();
+    for (size_t probe = 0; probe < MAKO_BACKEND_SLOTS; probe++) {
+        size_t idx = (start + probe) % MAKO_BACKEND_SLOTS;
+        MakoCacheSlot *s = &mako_cache_slots[idx];
+        if (!s->used) {
+            victim = idx;
+            break;
+        }
+        if (s->expires_ms <= now) {
+            victim = idx;
+            break;
+        }
+        if (mako_backend_key_eq(s->hash, s->key, s->key_len, key)) {
+            victim = idx;
+            break;
+        }
+    }
+    MakoCacheSlot *s = &mako_cache_slots[victim];
+    if (s->used) {
+        free(s->key);
+        free(s->value);
+    }
+    if (ttl_ms <= 0) {
+        s->used = 0;
+        return 1;
+    }
+    s->used = 1;
+    s->hash = h;
+    s->key = mako_backend_dup(k, key.len);
+    s->key_len = key.len;
+    s->value = mako_backend_dup(value.data ? value.data : "", value.len);
+    s->value_len = value.len;
+    s->expires_ms = now + ttl_ms;
+    return 1;
+}
+
+static inline MakoString mako_cache_get(MakoString key) {
+    uint64_t h = mako_hash_bytes(key.data ? key.data : "", key.len);
+    int64_t now = mako_now_ms();
+    for (size_t i = 0; i < MAKO_BACKEND_SLOTS; i++) {
+        MakoCacheSlot *s = &mako_cache_slots[i];
+        if (!s->used || !mako_backend_key_eq(s->hash, s->key, s->key_len, key)) continue;
+        if (s->expires_ms <= now) {
+            free(s->key);
+            free(s->value);
+            s->used = 0;
+            return mako_str_from_cstr("");
+        }
+        char *d = mako_backend_dup(s->value, s->value_len);
+        return (MakoString){d, s->value_len};
+    }
+    return mako_str_from_cstr("");
+}
+
+static inline int64_t mako_cache_has(MakoString key) {
+    MakoString value = mako_cache_get(key);
+    int64_t ok = value.len > 0 ? 1 : 0;
+    if (value.data) free(value.data);
+    return ok;
+}
+
+static inline int64_t mako_job_schedule(MakoString name, int64_t delay_ms) {
+    if (delay_ms < 0) delay_ms = 0;
+    const char *n = name.data ? name.data : "";
+    uint64_t h = mako_hash_bytes(n, name.len);
+    size_t start = (size_t)(h % MAKO_BACKEND_SLOTS);
+    size_t victim = start;
+    for (size_t probe = 0; probe < MAKO_BACKEND_SLOTS; probe++) {
+        size_t idx = (start + probe) % MAKO_BACKEND_SLOTS;
+        MakoJobSlot *s = &mako_job_slots[idx];
+        if (!s->used) {
+            victim = idx;
+            break;
+        }
+        if (mako_backend_key_eq(s->hash, s->name, s->name_len, name)) {
+            victim = idx;
+            break;
+        }
+    }
+    MakoJobSlot *s = &mako_job_slots[victim];
+    if (s->used) free(s->name);
+    s->used = 1;
+    s->hash = h;
+    s->name = mako_backend_dup(n, name.len);
+    s->name_len = name.len;
+    s->due_ms = mako_now_ms() + delay_ms;
+    return s->due_ms;
+}
+
+static inline int64_t mako_job_due(MakoString name) {
+    uint64_t h = mako_hash_bytes(name.data ? name.data : "", name.len);
+    int64_t now = mako_now_ms();
+    for (size_t i = 0; i < MAKO_BACKEND_SLOTS; i++) {
+        MakoJobSlot *s = &mako_job_slots[i];
+        if (s->used && mako_backend_key_eq(s->hash, s->name, s->name_len, name)) {
+            return now >= s->due_ms ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+static inline int64_t mako_job_delay_ms(MakoString name) {
+    uint64_t h = mako_hash_bytes(name.data ? name.data : "", name.len);
+    int64_t now = mako_now_ms();
+    for (size_t i = 0; i < MAKO_BACKEND_SLOTS; i++) {
+        MakoJobSlot *s = &mako_job_slots[i];
+        if (s->used && mako_backend_key_eq(s->hash, s->name, s->name_len, name)) {
+            int64_t left = s->due_ms - now;
+            return left > 0 ? left : 0;
+        }
+    }
+    return -1;
+}
+
+static inline int64_t mako_job_cancel(MakoString name) {
+    uint64_t h = mako_hash_bytes(name.data ? name.data : "", name.len);
+    for (size_t i = 0; i < MAKO_BACKEND_SLOTS; i++) {
+        MakoJobSlot *s = &mako_job_slots[i];
+        if (s->used && mako_backend_key_eq(s->hash, s->name, s->name_len, name)) {
+            free(s->name);
+            s->used = 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* ---- Connection pooling and load-balancing primitives ---- */
+static int64_t mako_conn_pool_rr = 0;
+
+static inline int64_t mako_conn_pool_slot(MakoString key, int64_t pool_size) {
+    if (pool_size <= 0) return -1;
+    uint64_t h = mako_hash_bytes(key.data ? key.data : "", key.len);
+    return (int64_t)(h % (uint64_t)pool_size);
+}
+
+static inline int64_t mako_conn_pool_next(int64_t pool_size) {
+    if (pool_size <= 0) return -1;
+    int64_t next = mako_conn_pool_rr++;
+    if (mako_conn_pool_rr < 0) mako_conn_pool_rr = 0;
+    if (next < 0) next = 0;
+    return next % pool_size;
+}
+
+static inline MakoString mako_lb_pick2(MakoString a, MakoString b, MakoString key) {
+    MakoString chosen = mako_conn_pool_slot(key, 2) == 0 ? a : b;
+    char *d = mako_backend_dup(chosen.data ? chosen.data : "", chosen.len);
+    return (MakoString){d, chosen.len};
+}
+
+static inline MakoString mako_lb_pick3(MakoString a, MakoString b, MakoString c, MakoString key) {
+    int64_t slot = mako_conn_pool_slot(key, 3);
+    MakoString chosen = slot == 0 ? a : (slot == 1 ? b : c);
+    char *d = mako_backend_dup(chosen.data ? chosen.data : "", chosen.len);
+    return (MakoString){d, chosen.len};
+}
+
+static inline MakoString mako_slog_redact(MakoString value) {
+    (void)value;
+    return mako_str_from_cstr("[REDACTED]");
+}
+
+static inline void mako_slog_with_redacted(MakoString level, MakoString msg, MakoString key) {
+    mako_slog_with(level, msg, key, mako_str_from_cstr("[REDACTED]"));
+}
+
+/* ---- Metrics (process-local counters/gauges/histograms) ---- */
+static int64_t mako_metric_counters[64];
+static int64_t mako_metric_gauges[64];
+static int64_t mako_metric_hist_count[64];
+static int64_t mako_metric_hist_sum[64];
+
+static inline void mako_metric_inc(int64_t id) {
+    if (id >= 0 && id < 64) mako_metric_counters[id]++;
+}
+
+static inline void mako_metric_add(int64_t id, int64_t delta) {
+    if (id >= 0 && id < 64) mako_metric_counters[id] += delta;
+}
+
+static inline int64_t mako_metric_get(int64_t id) {
+    if (id < 0 || id >= 64) return 0;
+    return mako_metric_counters[id];
+}
+
+static inline void mako_gauge_set(int64_t id, int64_t value) {
+    if (id >= 0 && id < 64) mako_metric_gauges[id] = value;
+}
+
+static inline void mako_gauge_add(int64_t id, int64_t delta) {
+    if (id >= 0 && id < 64) mako_metric_gauges[id] += delta;
+}
+
+static inline int64_t mako_gauge_get(int64_t id) {
+    if (id < 0 || id >= 64) return 0;
+    return mako_metric_gauges[id];
+}
+
+static inline void mako_hist_observe(int64_t id, int64_t value) {
+    if (id >= 0 && id < 64) {
+        mako_metric_hist_count[id]++;
+        mako_metric_hist_sum[id] += value;
+    }
+}
+
+static inline int64_t mako_hist_count(int64_t id) {
+    if (id < 0 || id >= 64) return 0;
+    return mako_metric_hist_count[id];
+}
+
+static inline int64_t mako_hist_sum(int64_t id) {
+    if (id < 0 || id >= 64) return 0;
+    return mako_metric_hist_sum[id];
+}
+
+static inline int64_t mako_hist_avg(int64_t id) {
+    if (id < 0 || id >= 64 || mako_metric_hist_count[id] == 0) return 0;
+    return mako_metric_hist_sum[id] / mako_metric_hist_count[id];
+}
+
+static inline MakoString mako_metrics_export(void) {
+    size_t cap = 8192;
+    char *buf = (char *)malloc(cap);
+    if (!buf) {
+        fprintf(stderr, "mako: OOM in metrics_export\n");
+        abort();
+    }
+    size_t len = 0;
+    for (int i = 0; i < 64; i++) {
+        if (mako_metric_counters[i] == 0 && mako_metric_gauges[i] == 0 && mako_metric_hist_count[i] == 0) {
+            continue;
+        }
+        int n = snprintf(
+            buf + len,
+            cap > len ? cap - len : 0,
+            "mako_counter_%d %" PRId64 "\n"
+            "mako_gauge_%d %" PRId64 "\n"
+            "mako_hist_count_%d %" PRId64 "\n"
+            "mako_hist_sum_%d %" PRId64 "\n",
+            i, mako_metric_counters[i],
+            i, mako_metric_gauges[i],
+            i, mako_metric_hist_count[i],
+            i, mako_metric_hist_sum[i]
+        );
+        if (n < 0) break;
+        len += (size_t)n;
+        if (len + 256 >= cap) {
+            cap *= 2;
+            char *next = (char *)realloc(buf, cap);
+            if (!next) {
+                free(buf);
+                fprintf(stderr, "mako: OOM in metrics_export grow\n");
+                abort();
+            }
+            buf = next;
+        }
+    }
+    buf[len] = 0;
+    MakoString out = {buf, len};
+    return out;
+}
+
+/* ---- JSON seed (escape + wrap object with one string field) ---- */
+static inline MakoString mako_json_escape(MakoString s) {
+    size_t cap = s.len * 2 + 8;
+    char *d = (char *)malloc(cap);
+    size_t j = 0;
+    for (size_t i = 0; i < s.len; i++) {
+        char c = s.data[i];
+        if (c == '"' || c == '\\') {
+            if (j + 2 >= cap) { cap *= 2; d = (char *)realloc(d, cap); }
+            d[j++] = '\\';
+            d[j++] = c;
+        } else if (c == '\n') {
+            if (j + 2 >= cap) { cap *= 2; d = (char *)realloc(d, cap); }
+            d[j++] = '\\';
+            d[j++] = 'n';
+        } else {
+            if (j + 1 >= cap) { cap *= 2; d = (char *)realloc(d, cap); }
+            d[j++] = c;
+        }
+    }
+    d[j] = 0;
+    return (MakoString){d, j};
+}
+
+static inline MakoString mako_json_object_str(MakoString key, MakoString val) {
+    MakoString ek = mako_json_escape(key);
+    MakoString ev = mako_json_escape(val);
+    size_t n = ek.len + ev.len + 16;
+    char *d = (char *)malloc(n);
+    int wrote = snprintf(d, n, "{\"%s\":\"%s\"}", ek.data, ev.data);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_json_si(
+    MakoString k1,
+    MakoString v1,
+    MakoString k2,
+    int64_t v2
+) {
+    MakoString e1 = mako_json_escape(k1);
+    MakoString ev = mako_json_escape(v1);
+    MakoString e2 = mako_json_escape(k2);
+    size_t n = e1.len + ev.len + e2.len + 48;
+    char *d = (char *)malloc(n);
+    int wrote = snprintf(
+        d,
+        n,
+        "{\"%s\":\"%s\",\"%s\":%lld}",
+        e1.data,
+        ev.data,
+        e2.data,
+        (long long)v2
+    );
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_json_ss(
+    MakoString k1,
+    MakoString v1,
+    MakoString k2,
+    MakoString v2
+) {
+    MakoString e1 = mako_json_escape(k1);
+    MakoString a = mako_json_escape(v1);
+    MakoString e2 = mako_json_escape(k2);
+    MakoString b = mako_json_escape(v2);
+    size_t n = e1.len + a.len + e2.len + b.len + 32;
+    char *d = (char *)malloc(n);
+    int wrote = snprintf(
+        d,
+        n,
+        "{\"%s\":\"%s\",\"%s\":\"%s\"}",
+        e1.data,
+        a.data,
+        e2.data,
+        b.data
+    );
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_json_i(MakoString key, int64_t val) {
+    MakoString ek = mako_json_escape(key);
+    size_t n = ek.len + 32;
+    char *d = (char *)malloc(n);
+    int wrote = snprintf(d, n, "{\"%s\":%lld}", ek.data, (long long)val);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+/* Parse: returns 1 if haystack contains "\"key\":\"value\"" substring match (seed). */
+static inline int64_t mako_json_has_string(MakoString json, MakoString key, MakoString expect) {
+    MakoString needle_key = mako_json_escape(key);
+    MakoString needle_val = mako_json_escape(expect);
+    size_t n = needle_key.len + needle_val.len + 8;
+    char *pat = (char *)malloc(n);
+    snprintf(pat, n, "\"%s\":\"%s\"", needle_key.data, needle_val.data);
+    int found = strstr(json.data ? json.data : "", pat) != NULL;
+    free(pat);
+    return found ? 1 : 0;
+}
+
+/* Extract string value for "key":"..." (Partial — no full JSON parser). */
+static inline MakoString mako_json_get_string(MakoString json, MakoString key) {
+    MakoString ek = mako_json_escape(key);
+    size_t n = ek.len + 8;
+    char *pat = (char *)malloc(n);
+    snprintf(pat, n, "\"%s\":\"", ek.data);
+    const char *src = json.data ? json.data : "";
+    const char *p = strstr(src, pat);
+    free(pat);
+    if (!p) return mako_str_from_cstr("");
+    p += ek.len + 4; /* past "key":" */
+    const char *end = p;
+    while (*end && *end != '"') {
+        if (*end == '\\' && end[1]) end += 2;
+        else end++;
+    }
+    size_t len = (size_t)(end - p);
+    char *d = (char *)malloc(len + 1);
+    memcpy(d, p, len);
+    d[len] = 0;
+    return (MakoString){d, len};
+}
+
+/* Extract int value for "key":<digits> (Partial). */
+static inline int64_t mako_json_get_int(MakoString json, MakoString key) {
+    MakoString ek = mako_json_escape(key);
+    size_t n = ek.len + 8;
+    char *pat = (char *)malloc(n);
+    snprintf(pat, n, "\"%s\":", ek.data);
+    const char *src = json.data ? json.data : "";
+    const char *p = strstr(src, pat);
+    free(pat);
+    if (!p) return 0;
+    p += ek.len + 3; /* past "key": */
+    while (*p == ' ' || *p == '\t') p++;
+    return (int64_t)strtoll(p, NULL, 10);
+}
+
+/* Wrap an already-serialized JSON value under a key: {"key":INNER}. */
+static inline MakoString mako_json_nest(MakoString key, MakoString inner) {
+    MakoString ek = mako_json_escape(key);
+    size_t n = ek.len + inner.len + 16;
+    char *d = (char *)malloc(n);
+    int wrote = snprintf(
+        d,
+        n,
+        "{\"%s\":%s}",
+        ek.data,
+        inner.data ? inner.data : "null"
+    );
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+/* Extract nested object/array value for "key":{...} or "key":[...] (brace-matched). */
+static inline MakoString mako_json_get_object(MakoString json, MakoString key) {
+    MakoString ek = mako_json_escape(key);
+    size_t n = ek.len + 8;
+    char *pat = (char *)malloc(n);
+    snprintf(pat, n, "\"%s\":", ek.data);
+    const char *src = json.data ? json.data : "";
+    const char *p = strstr(src, pat);
+    free(pat);
+    if (!p) return mako_str_from_cstr("");
+    p += ek.len + 3;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p != '{' && *p != '[') return mako_str_from_cstr("");
+    char open = *p;
+    char close = (open == '{') ? '}' : ']';
+    int depth = 0;
+    int in_str = 0;
+    const char *start = p;
+    for (const char *q = p; *q; q++) {
+        if (in_str) {
+            if (*q == '\\' && q[1]) {
+                q++;
+                continue;
+            }
+            if (*q == '"') in_str = 0;
+            continue;
+        }
+        if (*q == '"') {
+            in_str = 1;
+            continue;
+        }
+        if (*q == open) depth++;
+        else if (*q == close) {
+            depth--;
+            if (depth == 0) {
+                size_t len = (size_t)(q - start + 1);
+                char *d = (char *)malloc(len + 1);
+                memcpy(d, start, len);
+                d[len] = 0;
+                return (MakoString){d, len};
+            }
+        }
+    }
+    return mako_str_from_cstr("");
+}
+
+/* Nested path: json["k1"]["k2"] as string (Partial). */
+static inline MakoString mako_json_path_string(
+    MakoString json,
+    MakoString k1,
+    MakoString k2
+) {
+    MakoString obj = mako_json_get_object(json, k1);
+    MakoString out = mako_json_get_string(obj, k2);
+    return out;
+}
+
+static inline int64_t mako_json_path_int(
+    MakoString json,
+    MakoString k1,
+    MakoString k2
+) {
+    MakoString obj = mako_json_get_object(json, k1);
+    return mako_json_get_int(obj, k2);
+}
+
+/* ---- JSON arrays (Partial — top-level [...] of ints/strings) ---- */
+
+static inline int64_t mako_json_array_len(MakoString json) {
+    const char *s = json.data ? json.data : "";
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s != '[') return -1;
+    s++;
+    int64_t count = 0;
+    int depth = 1;
+    int in_str = 0;
+    int saw = 0;
+    for (; *s; s++) {
+        if (in_str) {
+            if (*s == '\\' && s[1]) {
+                s++;
+                continue;
+            }
+            if (*s == '"') in_str = 0;
+            continue;
+        }
+        if (*s == '"') {
+            in_str = 1;
+            saw = 1;
+            continue;
+        }
+        if (*s == '[' || *s == '{') {
+            depth++;
+            saw = 1;
+            continue;
+        }
+        if (*s == ']' || *s == '}') {
+            depth--;
+            if (depth == 0) {
+                if (saw) count++;
+                return count;
+            }
+            continue;
+        }
+        if (*s == ',' && depth == 1) {
+            count++;
+            saw = 0;
+            continue;
+        }
+        if (*s != ' ' && *s != '\t' && *s != '\n' && *s != '\r') saw = 1;
+    }
+    return -1;
+}
+
+/* Return pointer/len of the idx-th top-level array element (no alloc). */
+static inline int mako_json_array_elem(
+    MakoString json,
+    int64_t idx,
+    const char **out,
+    size_t *out_len
+) {
+    const char *s = json.data ? json.data : "";
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s != '[') return 0;
+    s++;
+    int64_t cur = 0;
+    int depth = 1;
+    int in_str = 0;
+    const char *elem = s;
+    for (; *s; s++) {
+        if (in_str) {
+            if (*s == '\\' && s[1]) {
+                s++;
+                continue;
+            }
+            if (*s == '"') in_str = 0;
+            continue;
+        }
+        if (*s == '"') {
+            in_str = 1;
+            continue;
+        }
+        if (*s == '[' || *s == '{') {
+            depth++;
+            continue;
+        }
+        if (*s == ']' || *s == '}') {
+            depth--;
+            if (depth == 0) {
+                if (cur == idx) {
+                    const char *e = s;
+                    while (elem < e && (*elem == ' ' || *elem == '\t')) elem++;
+                    while (e > elem && (e[-1] == ' ' || e[-1] == '\t')) e--;
+                    *out = elem;
+                    *out_len = (size_t)(e - elem);
+                    return 1;
+                }
+                return 0;
+            }
+            continue;
+        }
+        if (*s == ',' && depth == 1) {
+            if (cur == idx) {
+                const char *e = s;
+                while (elem < e && (*elem == ' ' || *elem == '\t')) elem++;
+                while (e > elem && (e[-1] == ' ' || e[-1] == '\t')) e--;
+                *out = elem;
+                *out_len = (size_t)(e - elem);
+                return 1;
+            }
+            cur++;
+            elem = s + 1;
+        }
+    }
+    return 0;
+}
+
+static inline int64_t mako_json_array_get_int(MakoString json, int64_t idx) {
+    const char *p = NULL;
+    size_t n = 0;
+    if (!mako_json_array_elem(json, idx, &p, &n) || !p || n == 0) return 0;
+    return (int64_t)strtoll(p, NULL, 10);
+}
+
+static inline MakoString mako_json_array_get_string(MakoString json, int64_t idx) {
+    const char *p = NULL;
+    size_t n = 0;
+    if (!mako_json_array_elem(json, idx, &p, &n) || !p || n < 2 || p[0] != '"')
+        return mako_str_from_cstr("");
+    /* strip quotes */
+    const char *start = p + 1;
+    const char *end = p + n - 1;
+    if (*end != '"') return mako_str_from_cstr("");
+    size_t len = (size_t)(end - start);
+    char *d = (char *)malloc(len + 1);
+    memcpy(d, start, len);
+    d[len] = 0;
+    return (MakoString){d, len};
+}
+
+static inline MakoString mako_json_array_ints3(int64_t a, int64_t b, int64_t c) {
+    char *d = (char *)malloc(96);
+    int wrote = snprintf(d, 96, "[%lld,%lld,%lld]", (long long)a, (long long)b, (long long)c);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_json_array_strings2(MakoString a, MakoString b) {
+    MakoString ea = mako_json_escape(a);
+    MakoString eb = mako_json_escape(b);
+    size_t n = ea.len + eb.len + 16;
+    char *d = (char *)malloc(n);
+    int wrote = snprintf(d, n, "[\"%s\",\"%s\"]", ea.data, eb.data);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+/* Append an int to a JSON array string (rebuild). */
+static inline MakoString mako_json_array_push_string(MakoString arr, MakoString v) {
+    const char *s = arr.data ? arr.data : "[]";
+    size_t al = arr.len ? arr.len : 2;
+    if (al < 2 || s[0] != '[' || s[al - 1] != ']') return mako_str_from_cstr("[]");
+    MakoString ev = mako_json_escape(v);
+    int empty = 1;
+    for (size_t i = 1; i + 1 < al; i++) {
+        if (s[i] != ' ' && s[i] != '\t') { empty = 0; break; }
+    }
+    size_t n = al + ev.len + 8;
+    char *d = (char *)malloc(n);
+    int wrote;
+    if (empty)
+        wrote = snprintf(d, n, "[\"%s\"]", ev.data);
+    else
+        wrote = snprintf(d, n, "%.*s,\"%s\"]", (int)(al - 1), s, ev.data);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_json_object_from_map_ss(MakoMapSS *m) {
+    if (!m) return mako_str_from_cstr("{}");
+    size_t cap = 64;
+    char *d = (char *)malloc(cap);
+    size_t len = 0;
+    d[len++] = '{';
+    int first = 1;
+    for (size_t i = 0; i < m->cap; i++) {
+        if (m->state[i] != MAKO_MAP_FULL) continue;
+        MakoString ek = mako_json_escape(m->keys[i]);
+        MakoString ev = mako_json_escape(m->vals[i]);
+        size_t need = len + ek.len + ev.len + 8;
+        if (need + 1 > cap) {
+            while (need + 1 > cap) cap *= 2;
+            d = (char *)realloc(d, cap);
+        }
+        if (!first) d[len++] = ',';
+        first = 0;
+        d[len++] = '"';
+        memcpy(d + len, ek.data, ek.len); len += ek.len;
+        d[len++] = '"';
+        d[len++] = ':';
+        d[len++] = '"';
+        memcpy(d + len, ev.data, ev.len); len += ev.len;
+        d[len++] = '"';
+    }
+    d[len++] = '}';
+    d[len] = 0;
+    return (MakoString){d, len};
+}
+
+static inline MakoString mako_json_array_push_int(MakoString arr, int64_t v) {
+    const char *s = arr.data ? arr.data : "[]";
+    size_t al = arr.len ? arr.len : 2;
+    if (al < 2 || s[0] != '[' || s[al - 1] != ']') return mako_str_from_cstr("[]");
+    int empty = 1;
+    for (size_t i = 1; i + 1 < al; i++) {
+        if (s[i] != ' ' && s[i] != '\t') {
+            empty = 0;
+            break;
+        }
+    }
+    size_t n = al + 32;
+    char *d = (char *)malloc(n);
+    int wrote;
+    if (empty)
+        wrote = snprintf(d, n, "[%lld]", (long long)v);
+    else
+        wrote = snprintf(d, n, "%.*s,%lld]", (int)(al - 1), s, (long long)v);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+/* Merge two JSON objects: strip outer braces and join. Partial — flat objects only. */
+static inline MakoString mako_json_merge(MakoString a, MakoString b) {
+    const char *ad = a.data ? a.data : "{}";
+    const char *bd = b.data ? b.data : "{}";
+    size_t al = a.len ? a.len : 2;
+    size_t bl = b.len ? b.len : 2;
+    /* expect { ... } */
+    if (al < 2 || bl < 2 || ad[0] != '{' || bd[0] != '{')
+        return mako_str_from_cstr("{}");
+    size_t n = al + bl + 4;
+    char *d = (char *)malloc(n);
+    /* {"a":1} + {"b":2} -> {"a":1,"b":2} */
+    size_t ai = al - 1; /* index of closing } */
+    size_t bi = 1;      /* skip opening { of b */
+    while (bi < bl && (bd[bi] == ' ' || bd[bi] == '\t')) bi++;
+    int wrote = snprintf(d, n, "%.*s,%s", (int)ai, ad, bd + bi);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_openapi_route(MakoString method, MakoString path, MakoString summary) {
+    MakoString em = mako_json_escape(method);
+    for (size_t i = 0; i < em.len; i++) {
+        if (em.data[i] >= 'A' && em.data[i] <= 'Z') em.data[i] = (char)(em.data[i] - 'A' + 'a');
+    }
+    MakoString ep = mako_json_escape(path);
+    MakoString es = mako_json_escape(summary);
+    size_t n = em.len + ep.len + es.len + 128;
+    char *d = (char *)malloc(n);
+    if (!d) mako_abort("openapi_route: out of memory");
+    int wrote = snprintf(
+        d,
+        n,
+        "{\"%s\":{\"%s\":{\"summary\":\"%s\",\"responses\":{\"200\":{\"description\":\"OK\"}}}}}",
+        ep.data,
+        em.data,
+        es.data
+    );
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_openapi_doc(MakoString title, MakoString version, MakoString paths) {
+    MakoString et = mako_json_escape(title);
+    MakoString ev = mako_json_escape(version);
+    const char *p = paths.data && paths.len ? paths.data : "{}";
+    size_t n = et.len + ev.len + paths.len + 128;
+    char *d = (char *)malloc(n);
+    if (!d) mako_abort("openapi_doc: out of memory");
+    int wrote = snprintf(
+        d,
+        n,
+        "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"%s\",\"version\":\"%s\"},\"paths\":%s}",
+        et.data,
+        ev.data,
+        p
+    );
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline int mako_gql_is_space(char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+static inline int mako_gql_is_ident_start(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+static inline int mako_gql_is_ident_char(char c) {
+    return mako_gql_is_ident_start(c) || (c >= '0' && c <= '9');
+}
+
+static inline size_t mako_gql_skip_ws(MakoString s, size_t i) {
+    while (i < s.len && s.data && mako_gql_is_space(s.data[i])) i++;
+    return i;
+}
+
+static inline size_t mako_gql_skip_ident(MakoString s, size_t i) {
+    while (i < s.len && s.data && mako_gql_is_ident_char(s.data[i])) i++;
+    return i;
+}
+
+static inline int mako_gql_ident_eq(MakoString s, size_t start, size_t end, MakoString want) {
+    size_t n = end > start ? end - start : 0;
+    return n == want.len && n > 0 && s.data && want.data && memcmp(s.data + start, want.data, n) == 0;
+}
+
+static inline int64_t mako_graphql_is_mutation(MakoString query) {
+    size_t i = mako_gql_skip_ws(query, 0);
+    if (i >= query.len || !query.data || !mako_gql_is_ident_start(query.data[i])) return 0;
+    size_t end = mako_gql_skip_ident(query, i);
+    return mako_gql_ident_eq(query, i, end, mako_str_from_cstr("mutation")) ? 1 : 0;
+}
+
+static inline MakoString mako_graphql_field(MakoString query) {
+    if (!query.data || query.len == 0) return mako_str_from_cstr("");
+    size_t i = 0;
+    while (i < query.len && query.data[i] != '{') i++;
+    if (i >= query.len) return mako_str_from_cstr("");
+    i = mako_gql_skip_ws(query, i + 1);
+    if (i >= query.len || !mako_gql_is_ident_start(query.data[i])) return mako_str_from_cstr("");
+    size_t end = mako_gql_skip_ident(query, i);
+    return mako_str_slice(query, (int64_t)i, (int64_t)end);
+}
+
+static inline MakoString mako_graphql_arg(MakoString query, MakoString name) {
+    if (!query.data || query.len == 0 || !name.data || name.len == 0) return mako_str_from_cstr("");
+    for (size_t i = 0; i + name.len < query.len; i++) {
+        if (!mako_gql_is_ident_start(query.data[i])) continue;
+        size_t end = mako_gql_skip_ident(query, i);
+        if (!mako_gql_ident_eq(query, i, end, name)) {
+            i = end;
+            continue;
+        }
+        size_t p = mako_gql_skip_ws(query, end);
+        if (p >= query.len || query.data[p] != ':') {
+            i = end;
+            continue;
+        }
+        p = mako_gql_skip_ws(query, p + 1);
+        if (p >= query.len) return mako_str_from_cstr("");
+        if (query.data[p] == '"') {
+            size_t start = p + 1;
+            p = start;
+            while (p < query.len) {
+                if (query.data[p] == '"' && (p == start || query.data[p - 1] != '\\')) {
+                    return mako_str_slice(query, (int64_t)start, (int64_t)p);
+                }
+                p++;
+            }
+            return mako_str_from_cstr("");
+        }
+        size_t start = p;
+        while (p < query.len) {
+            char c = query.data[p];
+            if (mako_gql_is_space(c) || c == ',' || c == ')' || c == '}' || c == ']') break;
+            p++;
+        }
+        return mako_str_slice(query, (int64_t)start, (int64_t)p);
+    }
+    return mako_str_from_cstr("");
+}
+
+static inline MakoString mako_graphql_data(MakoString field, MakoString json) {
+    MakoString ef = mako_json_escape(field);
+    const char *payload = json.data && json.len ? json.data : "null";
+    size_t payload_len = json.data && json.len ? json.len : 4;
+    size_t n = ef.len + payload_len + 32;
+    char *d = (char *)malloc(n);
+    if (!d) mako_abort("graphql_data: out of memory");
+    int wrote = snprintf(d, n, "{\"data\":{\"%s\":%.*s}}", ef.data, (int)payload_len, payload);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_graphql_error(MakoString message) {
+    MakoString em = mako_json_escape(message);
+    size_t n = em.len + 40;
+    char *d = (char *)malloc(n);
+    if (!d) mako_abort("graphql_error: out of memory");
+    int wrote = snprintf(d, n, "{\"errors\":[{\"message\":\"%s\"}]}", em.data);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_graphql_request(MakoString query) {
+    MakoString eq = mako_json_escape(query);
+    size_t n = eq.len + 16;
+    char *d = (char *)malloc(n);
+    if (!d) mako_abort("graphql_request: out of memory");
+    int wrote = snprintf(d, n, "{\"query\":\"%s\"}", eq.data);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_sse_event(MakoString event, MakoString data) {
+    size_t newline_count = 0;
+    for (size_t i = 0; i < data.len; i++) {
+        if (data.data[i] == '\n') newline_count++;
+    }
+    size_t n = event.len + data.len + 32 + (newline_count + 1) * 6;
+    char *d = (char *)malloc(n);
+    if (!d) mako_abort("sse_event: out of memory");
+    size_t pos = 0;
+    if (event.data && event.len) {
+        memcpy(d + pos, "event: ", 7);
+        pos += 7;
+        for (size_t i = 0; i < event.len; i++) {
+            char c = event.data[i];
+            d[pos++] = (c == '\r' || c == '\n') ? ' ' : c;
+        }
+        d[pos++] = '\n';
+    }
+    size_t start = 0;
+    for (size_t i = 0; i <= data.len; i++) {
+        if (i == data.len || data.data[i] == '\n') {
+            size_t end = i;
+            if (end > start && data.data[end - 1] == '\r') end--;
+            memcpy(d + pos, "data: ", 6);
+            pos += 6;
+            if (end > start) {
+                memcpy(d + pos, data.data + start, end - start);
+                pos += end - start;
+            }
+            d[pos++] = '\n';
+            start = i + 1;
+        }
+    }
+    d[pos++] = '\n';
+    return (MakoString){d, pos};
+}
+
+static inline MakoString mako_sse_retry(int64_t millis) {
+    char *d = (char *)malloc(48);
+    if (!d) mako_abort("sse_retry: out of memory");
+    if (millis < 0) millis = 0;
+    int wrote = snprintf(d, 48, "retry: %lld\n\n", (long long)millis);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_rpc_frame(MakoString method, MakoString payload) {
+    MakoString em = mako_json_escape(method);
+    const char *p = payload.data && payload.len ? payload.data : "{}";
+    size_t n = em.len + payload.len + 32;
+    char *d = (char *)malloc(n);
+    if (!d) mako_abort("rpc_frame: out of memory");
+    int wrote = snprintf(d, n, "{\"method\":\"%s\",\"payload\":%s}", em.data, p);
+    if (wrote < 0) wrote = 0;
+    return (MakoString){d, (size_t)wrote};
+}
+
+static inline MakoString mako_rpc_method(MakoString frame) {
+    return mako_json_get_string(frame, mako_str_from_cstr("method"));
+}
+
+static inline MakoString mako_rpc_payload(MakoString frame) {
+    return mako_json_get_object(frame, mako_str_from_cstr("payload"));
+}
+
+/* ---- Binary serialize int little-endian hex ---- */
+static inline MakoString mako_bin_encode_int(int64_t v) {
+    char *d = (char *)malloc(17);
+    snprintf(d, 17, "%016llx", (unsigned long long)v);
+    return (MakoString){d, 16};
+}
+
+static inline MakoString mako_trim_config_value(const char *p, size_t n) {
+    while (n > 0 && (*p == ' ' || *p == '\t' || *p == '"' || *p == '\'')) {
+        p++;
+        n--;
+    }
+    while (n > 0) {
+        char c = p[n - 1];
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '"' || c == '\'') {
+            n--;
+        } else {
+            break;
+        }
+    }
+    char *d = (char *)malloc(n + 1);
+    if (!d) mako_abort("config value: out of memory");
+    if (n) memcpy(d, p, n);
+    d[n] = 0;
+    return (MakoString){d, n};
+}
+
+static inline MakoString mako_yaml_get_string(MakoString doc, MakoString key) {
+    const char *p = doc.data ? doc.data : "";
+    size_t pos = 0;
+    while (pos < doc.len) {
+        size_t line_start = pos;
+        while (pos < doc.len && p[pos] != '\n') pos++;
+        size_t line_end = pos;
+        if (pos < doc.len && p[pos] == '\n') pos++;
+        size_t i = line_start;
+        while (i < line_end && (p[i] == ' ' || p[i] == '\t')) i++;
+        if (i + key.len < line_end && memcmp(p + i, key.data, key.len) == 0 && p[i + key.len] == ':') {
+            return mako_trim_config_value(p + i + key.len + 1, line_end - (i + key.len + 1));
+        }
+    }
+    return mako_str_from_cstr("");
+}
+
+static inline MakoString mako_toml_get_string(MakoString doc, MakoString key) {
+    const char *p = doc.data ? doc.data : "";
+    size_t pos = 0;
+    while (pos < doc.len) {
+        size_t line_start = pos;
+        while (pos < doc.len && p[pos] != '\n') pos++;
+        size_t line_end = pos;
+        if (pos < doc.len && p[pos] == '\n') pos++;
+        size_t i = line_start;
+        while (i < line_end && (p[i] == ' ' || p[i] == '\t')) i++;
+        if (i + key.len < line_end && memcmp(p + i, key.data, key.len) == 0) {
+            size_t j = i + key.len;
+            while (j < line_end && (p[j] == ' ' || p[j] == '\t')) j++;
+            if (j < line_end && p[j] == '=') return mako_trim_config_value(p + j + 1, line_end - j - 1);
+        }
+    }
+    return mako_str_from_cstr("");
+}
+
+static inline int64_t mako_toml_get_int(MakoString doc, MakoString key) {
+    MakoString s = mako_toml_get_string(doc, key);
+    if (!s.data || s.len == 0) return 0;
+    char buf[64];
+    size_t n = s.len < sizeof(buf) - 1 ? s.len : sizeof(buf) - 1;
+    memcpy(buf, s.data, n);
+    buf[n] = 0;
+    return (int64_t)strtoll(buf, NULL, 10);
+}
+
+static inline MakoString mako_msgpack_int_hex(int64_t v) {
+    char *d = (char *)malloc(19);
+    if (!d) mako_abort("msgpack_int_hex: out of memory");
+    snprintf(d, 19, "d3%016llx", (unsigned long long)v);
+    return (MakoString){d, 18};
+}
+
+static inline MakoString mako_cbor_int_hex(int64_t v) {
+    char *d = (char *)malloc(19);
+    if (!d) mako_abort("cbor_int_hex: out of memory");
+    if (v >= 0) {
+        snprintf(d, 19, "1b%016llx", (unsigned long long)v);
+    } else {
+        uint64_t n = (uint64_t)(-1 - v);
+        snprintf(d, 19, "3b%016llx", (unsigned long long)n);
+    }
+    return (MakoString){d, 18};
+}
+
+static inline MakoString mako_avro_long_hex(int64_t v) {
+    uint64_t zz = ((uint64_t)v << 1) ^ (uint64_t)(v >> 63);
+    char tmp[20];
+    size_t n = 0;
+    do {
+        uint8_t b = (uint8_t)(zz & 0x7f);
+        zz >>= 7;
+        if (zz) b |= 0x80;
+        snprintf(tmp + n * 2, sizeof(tmp) - n * 2, "%02x", b);
+        n++;
+    } while (zz && n < 10);
+    char *d = (char *)malloc(n * 2 + 1);
+    if (!d) mako_abort("avro_long_hex: out of memory");
+    memcpy(d, tmp, n * 2);
+    d[n * 2] = 0;
+    return (MakoString){d, n * 2};
+}
+
+/* ---- SHA-256 / HMAC ---- */
+static inline MakoString mako_sha256_hex(MakoString s) {
+    unsigned char dig[32];
+#if defined(MAKO_HAS_CC)
+    CC_SHA256(s.data, (CC_LONG)s.len, dig);
+#elif defined(MAKO_HAS_OPENSSL)
+    SHA256((const unsigned char *)s.data, s.len, dig);
+#else
+    /* Fallback: not cryptographic — FNV-ish fill for portability */
+    uint64_t h = 0xcbf29ce484222325ULL;
+    for (size_t i = 0; i < s.len; i++) {
+        h ^= (unsigned char)s.data[i];
+        h *= 0x100000001b3ULL;
+    }
+    for (int i = 0; i < 32; i++) dig[i] = (unsigned char)((h >> ((i % 8) * 8)) & 0xff);
+#endif
+    char *out = (char *)malloc(65);
+    for (int i = 0; i < 32; i++) sprintf(out + i * 2, "%02x", dig[i]);
+    out[64] = 0;
+    return (MakoString){out, 64};
+}
+
+/* Raw SHA-256 → 32-byte binary. */
+static inline MakoString mako_sha256_raw(MakoString s) {
+    unsigned char dig[32];
+#if defined(MAKO_HAS_CC)
+    CC_SHA256(s.data ? s.data : "", (CC_LONG)s.len, dig);
+#elif defined(MAKO_HAS_OPENSSL)
+    SHA256((const unsigned char *)(s.data ? s.data : ""), s.len, dig);
+#else
+    {
+        MakoString h = mako_sha256_hex(s);
+        if (!h.data || h.len < 64) { free(h.data); return mako_str_from_cstr(""); }
+        char *d = (char *)malloc(33);
+        if (!d) { free(h.data); return mako_str_from_cstr(""); }
+        for (int i = 0; i < 32; i++) {
+            unsigned int v = 0;
+            sscanf(h.data + i * 2, "%02x", &v);
+            d[i] = (char)v;
+        }
+        d[32] = 0;
+        free(h.data);
+        return (MakoString){d, 32};
+    }
+#endif
+    {
+        char *d = (char *)malloc(33);
+        if (!d) return mako_str_from_cstr("");
+        memcpy(d, dig, 32);
+        d[32] = 0;
+        return (MakoString){d, 32};
+    }
+}
+
+static inline MakoString mako_hmac_sha256_hex(MakoString key, MakoString msg) {
+    unsigned char dig[32];
+#if defined(MAKO_HAS_CC)
+    CCHmac(kCCHmacAlgSHA256, key.data, key.len, msg.data, msg.len, dig);
+#elif defined(MAKO_HAS_OPENSSL)
+    unsigned int len = 32;
+    HMAC(EVP_sha256(), key.data, (int)key.len, (const unsigned char *)msg.data, msg.len, dig, &len);
+#else
+    MakoString both = mako_str_concat(key, msg);
+    MakoString h = mako_sha256_hex(both);
+    return h;
+#endif
+    char *out = (char *)malloc(65);
+    for (int i = 0; i < 32; i++) sprintf(out + i * 2, "%02x", dig[i]);
+    out[64] = 0;
+    return (MakoString){out, 64};
+}
+
+/* Raw HMAC-SHA256 → 32-byte binary (for HKDF). Empty on failure. */
+static inline MakoString mako_hmac_sha256_raw(MakoString key, MakoString msg) {
+    unsigned char dig[32];
+#if defined(MAKO_HAS_CC)
+    CCHmac(kCCHmacAlgSHA256, key.data, key.len, msg.data, msg.len, dig);
+#elif defined(MAKO_HAS_OPENSSL)
+    unsigned int len = 32;
+    HMAC(EVP_sha256(), key.data, (int)key.len, (const unsigned char *)msg.data, msg.len, dig, &len);
+#else
+    {
+        /* Non-crypto fallback: reuse hex digest bytes (demo only). */
+        MakoString h = mako_hmac_sha256_hex(key, msg);
+        if (!h.data || h.len < 64) { free(h.data); return mako_str_from_cstr(""); }
+        char *d = (char *)malloc(33);
+        if (!d) { free(h.data); return mako_str_from_cstr(""); }
+        for (int i = 0; i < 32; i++) {
+            unsigned int v = 0;
+            sscanf(h.data + i * 2, "%02x", &v);
+            d[i] = (char)v;
+        }
+        d[32] = 0;
+        free(h.data);
+        return (MakoString){d, 32};
+    }
+#endif
+    {
+        char *d = (char *)malloc(33);
+        if (!d) return mako_str_from_cstr("");
+        memcpy(d, dig, 32);
+        d[32] = 0;
+        return (MakoString){d, 32};
+    }
+}
+
+/* HKDF-Expand-Label seed (RFC 8446 / QUIC initial secrets demo).
+ * Not full QUIC packet protection — documents initial-secret derivation shape.
+ * label is ASCII (e.g. "quic key"); out_len capped at 32. */
+static inline MakoString mako_quic_hkdf_expand_label(
+    MakoString secret, MakoString label, int64_t out_len
+) {
+    if (!secret.data || secret.len == 0 || !label.data || out_len <= 0 || out_len > 32)
+        return mako_str_from_cstr("");
+    /* HkdfLabel: uint16 length | uint8 label_len | "tls13 " + label | uint8 context_len=0 */
+    size_t prefix = 6; /* "tls13 " */
+    size_t lab_n = prefix + label.len;
+    if (lab_n > 255) return mako_str_from_cstr("");
+    size_t hklen = 2 + 1 + lab_n + 1;
+    char *hk = (char *)malloc(hklen);
+    if (!hk) return mako_str_from_cstr("");
+    hk[0] = (char)((out_len >> 8) & 0xff);
+    hk[1] = (char)(out_len & 0xff);
+    hk[2] = (char)lab_n;
+    memcpy(hk + 3, "tls13 ", 6);
+    memcpy(hk + 3 + 6, label.data, label.len);
+    hk[3 + lab_n] = 0; /* empty context */
+    MakoString info = {hk, hklen};
+    /* HKDF-Expand: T(1) = HMAC(secret, info || 0x01) */
+    char *info1 = (char *)malloc(hklen + 1);
+    if (!info1) { free(hk); return mako_str_from_cstr(""); }
+    memcpy(info1, hk, hklen);
+    info1[hklen] = 1;
+    MakoString msg = {info1, hklen + 1};
+    MakoString okm = mako_hmac_sha256_raw(secret, msg);
+    free(hk);
+    free(info1);
+    (void)info;
+    if (!okm.data || okm.len < (size_t)out_len) {
+        free(okm.data);
+        return mako_str_from_cstr("");
+    }
+    if (okm.len == (size_t)out_len) return okm;
+    MakoString clipped = mako_str_slice(okm, 0, out_len);
+    free(okm.data);
+    return clipped;
+}
+
+/* Hex form of HKDF-Expand-Label for tests. */
+static inline MakoString mako_quic_hkdf_expand_label_hex(
+    MakoString secret, MakoString label, int64_t out_len
+) {
+    MakoString raw = mako_quic_hkdf_expand_label(secret, label, out_len);
+    if (!raw.data || raw.len == 0) return mako_str_from_cstr("");
+    char *out = (char *)malloc(raw.len * 2 + 1);
+    if (!out) { free(raw.data); return mako_str_from_cstr(""); }
+    for (size_t i = 0; i < raw.len; i++)
+        sprintf(out + i * 2, "%02x", (unsigned char)raw.data[i]);
+    out[raw.len * 2] = 0;
+    size_t n = raw.len * 2;
+    free(raw.data);
+    return (MakoString){out, n};
+}
+
+/* RFC 9001 §5.2 initial salt (QUIC v1). */
+static const unsigned char MAKO_QUIC_V1_INITIAL_SALT[20] = {
+    0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3, 0x4d, 0x17,
+    0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a
+};
+
+/* HKDF-Extract(salt, ikm) = HMAC-SHA256(salt, ikm) → 32-byte PRK. */
+static inline MakoString mako_quic_hkdf_extract(MakoString salt, MakoString ikm) {
+    if (!ikm.data) return mako_str_from_cstr("");
+    MakoString s = salt;
+    char zeros[32];
+    MakoString zero_salt = {zeros, 32};
+    if (!salt.data || salt.len == 0) {
+        memset(zeros, 0, 32);
+        s = zero_salt;
+    }
+    return mako_hmac_sha256_raw(s, ikm);
+}
+
+/* Client initial secret from dest CID (RFC 9001 §5.2).
+ * initial_secret = HKDF-Extract(v1_salt, dcid)
+ * client_initial_secret = HKDF-Expand-Label(initial_secret, "client in", "", 32)
+ * Demo only — not packet protection. */
+static inline MakoString mako_quic_initial_client_secret(MakoString dcid) {
+    if (!dcid.data || dcid.len == 0) return mako_str_from_cstr("");
+    MakoString salt = {(char *)MAKO_QUIC_V1_INITIAL_SALT, 20};
+    MakoString prk = mako_quic_hkdf_extract(salt, dcid);
+    if (!prk.data || prk.len != 32) { free(prk.data); return mako_str_from_cstr(""); }
+    MakoString lab = mako_str_from_cstr("client in");
+    MakoString out = mako_quic_hkdf_expand_label(prk, lab, 32);
+    free(prk.data);
+    free(lab.data);
+    return out;
+}
+
+static inline MakoString mako_quic_initial_client_secret_hex(MakoString dcid) {
+    MakoString raw = mako_quic_initial_client_secret(dcid);
+    if (!raw.data || raw.len == 0) return mako_str_from_cstr("");
+    char *out = (char *)malloc(raw.len * 2 + 1);
+    if (!out) { free(raw.data); return mako_str_from_cstr(""); }
+    for (size_t i = 0; i < raw.len; i++)
+        sprintf(out + i * 2, "%02x", (unsigned char)raw.data[i]);
+    out[raw.len * 2] = 0;
+    size_t n = raw.len * 2;
+    free(raw.data);
+    return (MakoString){out, n};
+}
+
+/* Derive quic key (16) / quic iv (12) from client_initial_secret (RFC 9001 §5.1). */
+static inline MakoString mako_quic_initial_client_key(MakoString dcid) {
+    MakoString sec = mako_quic_initial_client_secret(dcid);
+    if (!sec.data) return mako_str_from_cstr("");
+    MakoString lab = mako_str_from_cstr("quic key");
+    MakoString out = mako_quic_hkdf_expand_label(sec, lab, 16);
+    free(sec.data);
+    free(lab.data);
+    return out;
+}
+
+static inline MakoString mako_quic_initial_client_iv(MakoString dcid) {
+    MakoString sec = mako_quic_initial_client_secret(dcid);
+    if (!sec.data) return mako_str_from_cstr("");
+    MakoString lab = mako_str_from_cstr("quic iv");
+    MakoString out = mako_quic_hkdf_expand_label(sec, lab, 12);
+    free(sec.data);
+    free(lab.data);
+    return out;
+}
+
+/* Header protection key: HKDF-Expand-Label(..., "quic hp", "", 16). */
+static inline MakoString mako_quic_initial_client_hp(MakoString dcid) {
+    MakoString sec = mako_quic_initial_client_secret(dcid);
+    if (!sec.data) return mako_str_from_cstr("");
+    MakoString lab = mako_str_from_cstr("quic hp");
+    MakoString out = mako_quic_hkdf_expand_label(sec, lab, 16);
+    free(sec.data);
+    free(lab.data);
+    return out;
+}
+
+static inline MakoString mako_quic_initial_client_key_hex(MakoString dcid) {
+    MakoString raw = mako_quic_initial_client_key(dcid);
+    if (!raw.data || raw.len == 0) return mako_str_from_cstr("");
+    char *out = (char *)malloc(raw.len * 2 + 1);
+    if (!out) { free(raw.data); return mako_str_from_cstr(""); }
+    for (size_t i = 0; i < raw.len; i++)
+        sprintf(out + i * 2, "%02x", (unsigned char)raw.data[i]);
+    out[raw.len * 2] = 0;
+    size_t n = raw.len * 2;
+    free(raw.data);
+    return (MakoString){out, n};
+}
+
+static inline MakoString mako_quic_initial_client_iv_hex(MakoString dcid) {
+    MakoString raw = mako_quic_initial_client_iv(dcid);
+    if (!raw.data || raw.len == 0) return mako_str_from_cstr("");
+    char *out = (char *)malloc(raw.len * 2 + 1);
+    if (!out) { free(raw.data); return mako_str_from_cstr(""); }
+    for (size_t i = 0; i < raw.len; i++)
+        sprintf(out + i * 2, "%02x", (unsigned char)raw.data[i]);
+    out[raw.len * 2] = 0;
+    size_t n = raw.len * 2;
+    free(raw.data);
+    return (MakoString){out, n};
+}
+
+static inline MakoString mako_quic_initial_client_hp_hex(MakoString dcid) {
+    MakoString raw = mako_quic_initial_client_hp(dcid);
+    if (!raw.data || raw.len == 0) return mako_str_from_cstr("");
+    char *out = (char *)malloc(raw.len * 2 + 1);
+    if (!out) { free(raw.data); return mako_str_from_cstr(""); }
+    for (size_t i = 0; i < raw.len; i++)
+        sprintf(out + i * 2, "%02x", (unsigned char)raw.data[i]);
+    out[raw.len * 2] = 0;
+    size_t n = raw.len * 2;
+    free(raw.data);
+    return (MakoString){out, n};
+}
+
+/* Nonce = IV XOR left-padded packet number (RFC 9001 §5.3). */
+static inline MakoString mako_quic_aead_nonce(MakoString iv, int64_t packet_number) {
+    if (!iv.data || iv.len != 12 || packet_number < 0) return mako_str_from_cstr("");
+    char *d = (char *)malloc(13);
+    if (!d) return mako_str_from_cstr("");
+    memcpy(d, iv.data, 12);
+    d[12] = 0;
+    uint64_t pn = (uint64_t)packet_number & 0x3fffffffffffffffULL;
+    for (int i = 0; i < 8; i++) {
+        d[4 + i] ^= (char)((pn >> (56 - 8 * i)) & 0xff);
+    }
+    return (MakoString){d, 12};
+}
+
+/* Decode even-length hex string → binary (for demo vectors / DCID literals). */
+static inline MakoString mako_hex_decode(MakoString hex) {
+    if (!hex.data || hex.len == 0 || (hex.len % 2) != 0) return mako_str_from_cstr("");
+    size_t n = hex.len / 2;
+    char *d = (char *)malloc(n + 1);
+    if (!d) return mako_str_from_cstr("");
+    for (size_t i = 0; i < n; i++) {
+        unsigned int v = 0;
+        if (sscanf(hex.data + i * 2, "%02x", &v) != 1) {
+            free(d);
+            return mako_str_from_cstr("");
+        }
+        d[i] = (char)v;
+    }
+    d[n] = 0;
+    return (MakoString){d, n};
+}
+
+/* ---- share / RC (cycle-free shared heap seed) ---- */
+typedef struct {
+    int64_t *ptr;
+    int64_t *refcount;
+} MakoShareInt;
+
+static inline MakoShareInt mako_share_int(int64_t v) {
+    MakoShareInt s;
+    s.ptr = (int64_t *)malloc(sizeof(int64_t));
+    *s.ptr = v;
+    s.refcount = (int64_t *)malloc(sizeof(int64_t));
+    *s.refcount = 1;
+    return s;
+}
+
+static inline MakoShareInt mako_share_clone(MakoShareInt s) {
+    if (s.refcount) (*s.refcount)++;
+    return s;
+}
+
+static inline int64_t mako_share_get(MakoShareInt s) {
+    return s.ptr ? *s.ptr : 0;
+}
+
+static inline void mako_share_drop(MakoShareInt s) {
+    if (!s.refcount) return;
+    (*s.refcount)--;
+    if (*s.refcount <= 0) {
+        free(s.ptr);
+        free(s.refcount);
+    }
+}
+
+/* ---- Zero-copy slice / view over int array (legacy helpers; prefer []int + a[i:j]) ---- */
+typedef struct {
+    int64_t *data;
+    size_t len;
+} MakoSlice;
+
+static inline MakoSlice mako_slice_ints(MakoIntArray a, int64_t start, int64_t end) {
+    MakoSlice s = {NULL, 0};
+    if (start < 0) start = 0;
+    if (end < start) end = start;
+    if ((size_t)end > a.len) end = (int64_t)a.len;
+    if ((size_t)start >= a.len) return s;
+    s.data = a.data + (size_t)start;
+    s.len = (size_t)(end - start);
+    return s;
+}
+
+static inline int64_t mako_slice_len(MakoSlice s) { return (int64_t)s.len; }
+
+static inline int64_t mako_slice_get(MakoSlice s, int64_t i) {
+    if (i < 0 || (size_t)i >= s.len) {
+        mako_abort("slice index out of bounds");
+    }
+    return s.data[i];
+}
+
+/* ---- Safe add with overflow check ---- */
+static inline int64_t mako_safe_add(int64_t a, int64_t b) {
+    int64_t r;
+    if (__builtin_add_overflow(a, b, &r)) {
+        mako_abort("integer overflow in safe_add");
+    }
+    return r;
+}
+
+/* ---- Plugin / dlopen ---- */
+static inline int64_t mako_dlopen_probe(MakoString path) {
+#if defined(_WIN32)
+    (void)path;
+    return 0;
+#else
+    void *h = dlopen(path.data, RTLD_LAZY);
+    if (!h) {
+        fprintf(stderr, "dlopen: %s\n", dlerror());
+        return 0;
+    }
+    dlclose(h);
+    return 1;
+#endif
+}
+
+/* ---- DB / queue / gRPC stubs (API surface compiles).
+ * Postgres lives in mako_db.h (libpq when MAKO_HAS_LIBPQ). ---- */
+typedef struct { int64_t handle; } MakoMysqlConn;
+typedef struct { int64_t handle; } MakoRedisConn;
+
+/* Protobuf wire varint (Partial toward gRPC). Zigzag not included. */
+static inline MakoString mako_pb_encode_varint(int64_t v) {
+    uint64_t x = (uint64_t)v;
+    char tmp[10];
+    size_t n = 0;
+    while (x >= 0x80) {
+        tmp[n++] = (char)((x & 0x7f) | 0x80);
+        x >>= 7;
+    }
+    tmp[n++] = (char)x;
+    char *d = (char *)malloc(n + 1);
+    memcpy(d, tmp, n);
+    d[n] = 0;
+    return (MakoString){d, n};
+}
+
+/* Decode first varint from bytes; returns value, or 0 on empty. Sets *ok=1 on success. */
+static inline int64_t mako_pb_decode_varint(MakoString s) {
+    if (!s.data || s.len == 0) return 0;
+    uint64_t result = 0;
+    int shift = 0;
+    for (size_t i = 0; i < s.len && i < 10; i++) {
+        unsigned char b = (unsigned char)s.data[i];
+        result |= (uint64_t)(b & 0x7f) << shift;
+        if ((b & 0x80) == 0) return (int64_t)result;
+        shift += 7;
+    }
+    return 0; /* truncated / overflow → 0 */
+}
+
+static inline int64_t mako_pb_varint_len(MakoString s) {
+    if (!s.data || s.len == 0) return -1;
+    for (size_t i = 0; i < s.len && i < 10; i++) {
+        if (((unsigned char)s.data[i] & 0x80) == 0) return (int64_t)(i + 1);
+    }
+    return -1;
+}
+
+/* Protobuf field key = (field_number << 3) | wire_type. Wire: 0=varint 1=64bit 2=len 5=32bit. */
+static inline MakoString mako_pb_encode_key(int64_t field, int64_t wire) {
+    if (field < 1 || field > 536870911 || wire < 0 || wire > 7) {
+        return mako_pb_encode_varint(0);
+    }
+    return mako_pb_encode_varint((field << 3) | (wire & 7));
+}
+
+static inline int64_t mako_pb_key_field(MakoString s) {
+    int64_t k = mako_pb_decode_varint(s);
+    return k >> 3;
+}
+
+static inline int64_t mako_pb_key_wire(MakoString s) {
+    int64_t k = mako_pb_decode_varint(s);
+    return k & 7;
+}
+
+/* Zigzag for sint32/sint64 (Partial protobuf). */
+static inline int64_t mako_pb_zigzag_encode(int64_t n) {
+    return (n << 1) ^ (n >> 63);
+}
+
+static inline int64_t mako_pb_zigzag_decode(int64_t n) {
+    return (n >> 1) ^ (-(n & 1));
+}
+
+static inline MakoString mako_pb_encode_sint(int64_t n) {
+    return mako_pb_encode_varint(mako_pb_zigzag_encode(n));
+}
+
+static inline int64_t mako_pb_decode_sint(MakoString s) {
+    return mako_pb_zigzag_decode(mako_pb_decode_varint(s));
+}
+
+/* Wire type 2: length-delimited payload = varint(len) || bytes. */
+static inline MakoString mako_pb_encode_bytes(MakoString payload) {
+    MakoString lenv = mako_pb_encode_varint((int64_t)(payload.data ? payload.len : 0));
+    MakoString out = mako_str_concat(lenv, payload);
+    free(lenv.data);
+    return out;
+}
+
+/* First varint = declared length; -1 if truncated/invalid. */
+static inline int64_t mako_pb_bytes_len(MakoString s) {
+    int64_t vl = mako_pb_varint_len(s);
+    if (vl < 0) return -1;
+    int64_t declared = mako_pb_decode_varint(s);
+    if (declared < 0) return -1;
+    if ((int64_t)s.len < vl + declared) return -1;
+    return declared;
+}
+
+/* field_number + varint value (wire 0). */
+static inline MakoString mako_pb_encode_field_varint(int64_t field, int64_t value) {
+    MakoString key = mako_pb_encode_key(field, 0);
+    MakoString val = mako_pb_encode_varint(value);
+    MakoString out = mako_str_concat(key, val);
+    free(key.data);
+    free(val.data);
+    return out;
+}
+
+/* Fixed simple message: field 1 = string (wire 2), field 2 = varint (wire 0). */
+static inline MakoString mako_pb_encode_simple(MakoString name, int64_t id) {
+    MakoString k1 = mako_pb_encode_key(1, 2);
+    MakoString v1 = mako_pb_encode_bytes(name);
+    MakoString f1 = mako_str_concat(k1, v1);
+    free(k1.data);
+    free(v1.data);
+    MakoString f2 = mako_pb_encode_field_varint(2, id);
+    MakoString out = mako_str_concat(f1, f2);
+    free(f1.data);
+    free(f2.data);
+    return out;
+}
+
+/* Decode one field at *off; advances *off. Returns 1 on success. */
+static inline int mako_pb_next_field(
+    const unsigned char *p, size_t n, size_t *off,
+    int64_t *out_field, int64_t *out_wire,
+    int64_t *out_varint, size_t *out_bytes_off, size_t *out_bytes_len
+) {
+    if (!p || !off || *off >= n) return 0;
+    MakoString rest = {(char *)(p + *off), n - *off};
+    int64_t kl = mako_pb_varint_len(rest);
+    if (kl < 0) return 0;
+    int64_t key = mako_pb_decode_varint(rest);
+    int64_t field = key >> 3;
+    int64_t wire = key & 7;
+    size_t i = *off + (size_t)kl;
+    if (out_field) *out_field = field;
+    if (out_wire) *out_wire = wire;
+    if (out_varint) *out_varint = 0;
+    if (out_bytes_off) *out_bytes_off = 0;
+    if (out_bytes_len) *out_bytes_len = 0;
+    if (wire == 0) {
+        MakoString vr = {(char *)(p + i), n - i};
+        int64_t vl = mako_pb_varint_len(vr);
+        if (vl < 0) return 0;
+        if (out_varint) *out_varint = mako_pb_decode_varint(vr);
+        *off = i + (size_t)vl;
+        return 1;
+    }
+    if (wire == 2) {
+        MakoString lr = {(char *)(p + i), n - i};
+        int64_t ll = mako_pb_varint_len(lr);
+        if (ll < 0) return 0;
+        int64_t blen = mako_pb_decode_varint(lr);
+        if (blen < 0) return 0;
+        size_t start = i + (size_t)ll;
+        if (start + (size_t)blen > n) return 0;
+        if (out_bytes_off) *out_bytes_off = start;
+        if (out_bytes_len) *out_bytes_len = (size_t)blen;
+        *off = start + (size_t)blen;
+        return 1;
+    }
+    return 0; /* unsupported wire for this seed */
+}
+
+static inline MakoString mako_pb_simple_name(MakoString msg) {
+    if (!msg.data) return (MakoString){NULL, 0};
+    const unsigned char *p = (const unsigned char *)msg.data;
+    size_t off = 0;
+    while (off < msg.len) {
+        int64_t field = 0, wire = 0, vint = 0;
+        size_t bo = 0, bl = 0;
+        if (!mako_pb_next_field(p, msg.len, &off, &field, &wire, &vint, &bo, &bl)) break;
+        if (field == 1 && wire == 2) {
+            return mako_str_slice(msg, (int64_t)bo, (int64_t)(bo + bl));
+        }
+        (void)vint;
+    }
+    return (MakoString){NULL, 0};
+}
+
+static inline int64_t mako_pb_simple_id(MakoString msg) {
+    if (!msg.data) return 0;
+    const unsigned char *p = (const unsigned char *)msg.data;
+    size_t off = 0;
+    while (off < msg.len) {
+        int64_t field = 0, wire = 0, vint = 0;
+        size_t bo = 0, bl = 0;
+        if (!mako_pb_next_field(p, msg.len, &off, &field, &wire, &vint, &bo, &bl)) break;
+        if (field == 2 && wire == 0) return vint;
+        (void)bo; (void)bl;
+    }
+    return 0;
+}
+
+/* Nested: simple msg + field 3 = embedded simple (wire 2). */
+static inline MakoString mako_pb_encode_nested(
+    MakoString name, int64_t id, MakoString inner_name, int64_t inner_id
+) {
+    MakoString outer = mako_pb_encode_simple(name, id);
+    MakoString inner = mako_pb_encode_simple(inner_name, inner_id);
+    MakoString k3 = mako_pb_encode_key(3, 2);
+    MakoString v3 = mako_pb_encode_bytes(inner);
+    MakoString f3 = mako_str_concat(k3, v3);
+    free(k3.data);
+    free(v3.data);
+    free(inner.data);
+    MakoString out = mako_str_concat(outer, f3);
+    free(outer.data);
+    free(f3.data);
+    return out;
+}
+
+static inline MakoString mako_pb_nested_inner(MakoString msg) {
+    if (!msg.data) return (MakoString){NULL, 0};
+    const unsigned char *p = (const unsigned char *)msg.data;
+    size_t off = 0;
+    while (off < msg.len) {
+        int64_t field = 0, wire = 0, vint = 0;
+        size_t bo = 0, bl = 0;
+        if (!mako_pb_next_field(p, msg.len, &off, &field, &wire, &vint, &bo, &bl)) break;
+        if (field == 3 && wire == 2) {
+            return mako_str_slice(msg, (int64_t)bo, (int64_t)(bo + bl));
+        }
+        (void)vint;
+    }
+    return (MakoString){NULL, 0};
+}
+
+/* Repeated field 4 = varint (wire 0), multiple occurrences. */
+static inline MakoString mako_pb_encode_repeated_varint(int64_t a, int64_t b, int64_t c) {
+    MakoString f1 = mako_pb_encode_field_varint(4, a);
+    MakoString f2 = mako_pb_encode_field_varint(4, b);
+    MakoString f3 = mako_pb_encode_field_varint(4, c);
+    MakoString t = mako_str_concat(f1, f2);
+    free(f1.data);
+    free(f2.data);
+    MakoString out = mako_str_concat(t, f3);
+    free(t.data);
+    free(f3.data);
+    return out;
+}
+
+static inline int64_t mako_pb_repeated_count(MakoString msg, int64_t field) {
+    if (!msg.data) return 0;
+    const unsigned char *p = (const unsigned char *)msg.data;
+    size_t off = 0;
+    int64_t count = 0;
+    while (off < msg.len) {
+        int64_t f = 0, wire = 0, vint = 0;
+        size_t bo = 0, bl = 0;
+        if (!mako_pb_next_field(p, msg.len, &off, &f, &wire, &vint, &bo, &bl)) break;
+        if (f == field && wire == 0) count++;
+        (void)vint; (void)bo; (void)bl;
+    }
+    return count;
+}
+
+/* 0-based index into repeated varint field occurrences. */
+static inline int64_t mako_pb_repeated_at(MakoString msg, int64_t field, int64_t index) {
+    if (!msg.data || index < 0) return 0;
+    const unsigned char *p = (const unsigned char *)msg.data;
+    size_t off = 0;
+    int64_t seen = 0;
+    while (off < msg.len) {
+        int64_t f = 0, wire = 0, vint = 0;
+        size_t bo = 0, bl = 0;
+        if (!mako_pb_next_field(p, msg.len, &off, &f, &wire, &vint, &bo, &bl)) break;
+        if (f == field && wire == 0) {
+            if (seen == index) return vint;
+            seen++;
+        }
+        (void)bo; (void)bl;
+    }
+    return 0;
+}
+
+/* gRPC length-prefixed message: 1-byte compressed flag + 4-byte big-endian length + payload.
+ * Limits: uncompressed only (flag=0), payload ≤ 16MiB. */
+static inline MakoString mako_grpc_encode_message(MakoString payload) {
+    size_t plen = payload.data ? payload.len : 0;
+    if (plen > 0xFFFFFFu) return (MakoString){NULL, 0};
+    size_t n = 5 + plen;
+    char *d = (char *)malloc(n + 1);
+    if (!d) return (MakoString){NULL, 0};
+    d[0] = 0; /* uncompressed */
+    d[1] = (char)((plen >> 24) & 0xff);
+    d[2] = (char)((plen >> 16) & 0xff);
+    d[3] = (char)((plen >> 8) & 0xff);
+    d[4] = (char)(plen & 0xff);
+    if (plen && payload.data) memcpy(d + 5, payload.data, plen);
+    d[n] = 0;
+    return (MakoString){d, n};
+}
+
+static inline int64_t mako_grpc_message_len(MakoString framed) {
+    if (!framed.data || framed.len < 5) return -1;
+    if ((unsigned char)framed.data[0] != 0) return -1; /* compressed not supported */
+    uint32_t plen = ((uint32_t)(unsigned char)framed.data[1] << 24)
+                  | ((uint32_t)(unsigned char)framed.data[2] << 16)
+                  | ((uint32_t)(unsigned char)framed.data[3] << 8)
+                  | ((uint32_t)(unsigned char)framed.data[4]);
+    if (framed.len < 5 + plen) return -1;
+    return (int64_t)plen;
+}
+
+/* Default gRPC max receive message size seed (4 MiB), matching common defaults. */
+#define MAKO_GRPC_DEFAULT_MAX_MSG (4 * 1024 * 1024)
+
+/* 1 if framed message length is within max_bytes (and parseable); 0 otherwise.
+ * max_bytes <= 0 → use MAKO_GRPC_DEFAULT_MAX_MSG. */
+static inline int64_t mako_grpc_message_within_limit(MakoString framed, int64_t max_bytes) {
+    int64_t plen = mako_grpc_message_len(framed);
+    if (plen < 0) return 0;
+    int64_t lim = max_bytes > 0 ? max_bytes : (int64_t)MAKO_GRPC_DEFAULT_MAX_MSG;
+    return plen <= lim ? 1 : 0;
+}
+
+static inline int64_t mako_grpc_default_max_message(void) {
+    return (int64_t)MAKO_GRPC_DEFAULT_MAX_MSG;
+}
+
+static inline MakoString mako_grpc_message_payload(MakoString framed) {
+    int64_t plen = mako_grpc_message_len(framed);
+    if (plen < 0) return (MakoString){NULL, 0};
+    return mako_str_slice(framed, 5, 5 + plen);
+}
+
+/* Unary gRPC request body: pb_encode_simple + length-prefix framing. */
+static inline MakoString mako_grpc_unary_request(MakoString name, int64_t id) {
+    MakoString pb = mako_pb_encode_simple(name, id);
+    MakoString framed = mako_grpc_encode_message(pb);
+    free(pb.data);
+    return framed;
+}
+
+/* Decode unary framed message → simple name (empty on failure). */
+static inline MakoString mako_grpc_unary_name(MakoString framed) {
+    MakoString payload = mako_grpc_message_payload(framed);
+    if (!payload.data) return (MakoString){NULL, 0};
+    MakoString name = mako_pb_simple_name(payload);
+    free(payload.data);
+    return name;
+}
+
+static inline int64_t mako_grpc_unary_id(MakoString framed) {
+    MakoString payload = mako_grpc_message_payload(framed);
+    if (!payload.data) return 0;
+    int64_t id = mako_pb_simple_id(payload);
+    free(payload.data);
+    return id;
+}
+
+/* gRPC content-type header value. */
+static inline MakoString mako_grpc_content_type(void) {
+    return mako_str_from_cstr("application/grpc");
+}
+
+/* Minimal gRPC status trailer block (HTTP/2 trailers seed).
+ * Format: "grpc-status: <code>\\r\\ngrpc-message: \\r\\n" */
+static inline MakoString mako_grpc_status_trailer(int64_t code) {
+    char buf[64];
+    int n = snprintf(buf, sizeof(buf), "grpc-status: %lld\r\ngrpc-message: \r\n", (long long)code);
+    if (n < 0 || n >= (int)sizeof(buf)) return (MakoString){NULL, 0};
+    return mako_str_from_cstr(buf);
+}
+
+/* Parse grpc-status from trailer bytes; -1 if missing/invalid. */
+static inline int64_t mako_grpc_status_code(MakoString trailers) {
+    if (!trailers.data) return -1;
+    const char *p = trailers.data;
+    size_t n = trailers.len;
+    const char *key = "grpc-status:";
+    size_t klen = 12;
+    for (size_t i = 0; i + klen < n; i++) {
+        int ok = 1;
+        for (size_t j = 0; j < klen; j++) {
+            char a = p[i + j];
+            char b = key[j];
+            if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+            if (a != b) { ok = 0; break; }
+        }
+        if (!ok) continue;
+        size_t k = i + klen;
+        while (k < n && (p[k] == ' ' || p[k] == '\t')) k++;
+        if (k >= n) return -1;
+        int64_t v = 0;
+        int any = 0;
+        while (k < n && p[k] >= '0' && p[k] <= '9') {
+            v = v * 10 + (p[k] - '0');
+            k++;
+            any = 1;
+        }
+        return any ? v : -1;
+    }
+    return -1;
+}
+
+/* Assemble HTTP/2 unary gRPC request: HEADERS (content-type) + DATA (framed pb).
+ * Stream id required. HEADERS without END_STREAM; DATA with END_STREAM.
+ * Limits: single content-type literal header; no path/:method. */
+static inline MakoString mako_grpc_http2_unary(
+    int64_t stream, MakoString name, int64_t id
+) {
+    MakoString ct = mako_grpc_content_type();
+    MakoString lit = mako_hpack_encode_literal(mako_str_from_cstr("content-type"), ct);
+    free(ct.data);
+    MakoString hdrs = mako_http2_headers_frame(stream, lit, 0x4); /* END_HEADERS */
+    free(lit.data);
+    MakoString body = mako_grpc_unary_request(name, id);
+    MakoString data = mako_http2_data_frame(stream, body, 0x1); /* END_STREAM */
+    free(body.data);
+    MakoString out = mako_http2_concat_frames(hdrs, data);
+    free(hdrs.data);
+    free(data.data);
+    return out;
+}
+
+/* Extract gRPC framed payload from a unary HTTP/2 buffer (first DATA frame). */
+static inline MakoString mako_grpc_http2_unary_payload(MakoString buf) {
+    /* Find first DATA frame (type 0) */
+    const unsigned char *p = (const unsigned char *)(buf.data ? buf.data : "");
+    size_t n = buf.len;
+    size_t off = 0;
+    while (off + 9 <= n) {
+        int64_t len = -1, typ = -1;
+        if (!mako_http2_parse_frame(p + off, n - off, &len, &typ, NULL, NULL)) break;
+        if (typ == 0) {
+            MakoString frame = mako_str_slice(buf, (int64_t)off, (int64_t)(off + 9 + (size_t)len));
+            MakoString payload = mako_http2_frame_payload(frame);
+            free(frame.data);
+            return payload;
+        }
+        off += 9 + (size_t)len;
+    }
+    return (MakoString){NULL, 0};
+}
+
+/* Assemble unary gRPC response: HEADERS + DATA + trailer HEADERS (grpc-status).
+ * Trailer carries END_STREAM. `status` is encoded as literal decimal in trailer. */
+static inline MakoString mako_grpc_http2_unary_response_status(
+    int64_t stream, MakoString name, int64_t id, int64_t status
+) {
+    MakoString ct = mako_grpc_content_type();
+    MakoString lit = mako_hpack_encode_literal(mako_str_from_cstr("content-type"), ct);
+    free(ct.data);
+    MakoString hdrs = mako_http2_headers_frame(stream, lit, 0x4); /* END_HEADERS */
+    free(lit.data);
+    MakoString body = mako_grpc_unary_request(name, id); /* same wire as request msg */
+    MakoString data = mako_http2_data_frame(stream, body, 0);
+    free(body.data);
+    char scode[16];
+    int sn = snprintf(scode, sizeof(scode), "%lld", (long long)status);
+    if (sn < 0 || sn >= (int)sizeof(scode)) {
+        free(hdrs.data);
+        free(data.data);
+        return (MakoString){NULL, 0};
+    }
+    MakoString tlit = mako_hpack_encode_literal(
+        mako_str_from_cstr("grpc-status"), mako_str_from_cstr(scode)
+    );
+    MakoString th = mako_http2_headers_frame(stream, tlit, 0x5); /* END_HEADERS|END_STREAM */
+    free(tlit.data);
+    MakoString mid = mako_http2_concat_frames(hdrs, data);
+    free(hdrs.data);
+    free(data.data);
+    MakoString out = mako_http2_concat_frames(mid, th);
+    free(mid.data);
+    free(th.data);
+    return out;
+}
+
+/* Assemble unary gRPC response with grpc-status 0 (compat). */
+static inline MakoString mako_grpc_http2_unary_response(
+    int64_t stream, MakoString name, int64_t id
+) {
+    return mako_grpc_http2_unary_response_status(stream, name, id, 0);
+}
+
+/* Parse response DATA payload from assembled unary response (HEADERS+DATA+trailers). */
+static inline MakoString mako_grpc_http2_response_payload(MakoString buf) {
+    return mako_grpc_http2_unary_payload(buf);
+}
+
+/* Extract grpc-status from trailer HEADERS after DATA in a multi-frame buffer.
+ * Requires: HEADERS (no END_STREAM) … DATA … HEADERS with END_STREAM.
+ * Decodes HPACK on the trailer block only. Returns -1 if missing/invalid. */
+static inline int64_t mako_grpc_http2_response_status(MakoString buf) {
+    if (!buf.data || buf.len < 9) return -1;
+    const unsigned char *p = (const unsigned char *)buf.data;
+    size_t n = buf.len;
+    size_t off = 0;
+    int saw_headers = 0;
+    int saw_data = 0;
+    int64_t status = -1;
+    while (off + 9 <= n) {
+        int64_t len = -1, typ = -1, flags = -1;
+        if (!mako_http2_parse_frame(p + off, n - off, &len, &typ, &flags, NULL)) break;
+        if (typ == 1) {
+            if ((flags & 0x1) == 0) {
+                saw_headers = 1; /* initial response headers */
+            } else if (saw_headers && saw_data && len > 0) {
+                /* Trailer HEADERS after DATA */
+                MakoString frame = mako_str_slice(buf, (int64_t)off, (int64_t)(off + 9 + (size_t)len));
+                MakoString pl = mako_http2_frame_payload(frame);
+                free(frame.data);
+                if (mako_hpack_decode_block(pl) >= 0) {
+                    int64_t cnt = mako_hpack_decoded_count();
+                    for (int64_t i = 0; i < cnt; i++) {
+                        MakoString nm = mako_hpack_decoded_name(i);
+                        MakoString vl = mako_hpack_decoded_value(i);
+                        if (nm.data && nm.len == 11
+                            && memcmp(nm.data, "grpc-status", 11) == 0 && vl.data) {
+                            int64_t v = 0;
+                            int any = 0;
+                            for (size_t k = 0; k < vl.len; k++) {
+                                if (vl.data[k] < '0' || vl.data[k] > '9') { any = 0; break; }
+                                v = v * 10 + (vl.data[k] - '0');
+                                any = 1;
+                            }
+                            if (any) status = v;
+                        }
+                        free(nm.data);
+                        free(vl.data);
+                    }
+                }
+                free(pl.data);
+            }
+        } else if (typ == 0) {
+            saw_data = 1;
+        }
+        off += 9 + (size_t)len;
+    }
+    return status;
+}
+
+/* gRPC streaming seed: one DATA frame carrying a framed message.
+ * end_stream=0 → more messages may follow; end_stream!=0 → END_STREAM flag. */
+static inline MakoString mako_grpc_http2_stream_data(
+    int64_t stream, MakoString name, int64_t id, int64_t end_stream
+) {
+    MakoString body = mako_grpc_unary_request(name, id);
+    int64_t flags = end_stream ? 0x1 : 0;
+    MakoString data = mako_http2_data_frame(stream, body, flags);
+    free(body.data);
+    return data;
+}
+
+/* Two-message client stream: DATA (no END_STREAM) + DATA (END_STREAM). */
+static inline MakoString mako_grpc_http2_stream_two(
+    int64_t stream, MakoString name1, int64_t id1, MakoString name2, int64_t id2
+) {
+    MakoString a = mako_grpc_http2_stream_data(stream, name1, id1, 0);
+    MakoString b = mako_grpc_http2_stream_data(stream, name2, id2, 1);
+    MakoString out = mako_http2_concat_frames(a, b);
+    free(a.data);
+    free(b.data);
+    return out;
+}
+
+/* Count DATA frames on `stream` in a buffer; optionally require last has END_STREAM.
+ * Returns count, or -1 if no DATA / last missing END_STREAM when require_end!=0. */
+static inline int64_t mako_grpc_http2_stream_data_count(MakoString buf, int64_t stream) {
+    if (!buf.data || buf.len < 9 || stream <= 0) return -1;
+    const unsigned char *p = (const unsigned char *)buf.data;
+    size_t n = buf.len;
+    size_t off = 0;
+    int64_t count = 0;
+    int last_es = 0;
+    while (off + 9 <= n) {
+        int64_t len = -1, typ = -1, flags = -1, sid = -1;
+        if (!mako_http2_parse_frame(p + off, n - off, &len, &typ, &flags, &sid)) break;
+        if (typ == 0 && sid == stream) {
+            count++;
+            last_es = ((flags & 0x1) != 0) ? 1 : 0;
+        }
+        off += 9 + (size_t)len;
+    }
+    if (count == 0) return -1;
+    return last_es ? count : -count; /* negative if stream not ended */
+}
+
+/* One-flow seed: client two-DATA stream + server unary response (status after DATA).
+ * Returns concat(stream_two, unary_response_status). Not a live transport. */
+static inline MakoString mako_grpc_http2_client_stream_flow(
+    int64_t stream,
+    MakoString name1, int64_t id1,
+    MakoString name2, int64_t id2,
+    MakoString reply, int64_t rid,
+    int64_t status
+) {
+    MakoString req = mako_grpc_http2_stream_two(stream, name1, id1, name2, id2);
+    MakoString resp = mako_grpc_http2_unary_response_status(stream, reply, rid, status);
+    MakoString out = mako_http2_concat_frames(req, resp);
+    free(req.data);
+    free(resp.data);
+    return out;
+}
+
+static inline int64_t mako_grpc_stub_ping(void) {
+    fprintf(stderr, "mako: grpc stub\n");
+    return 0;
+}
+static inline int64_t mako_queue_stub_ping(void) {
+    fprintf(stderr, "mako: queue stub\n");
+    return 0;
+}
+
+/* SQL DSL seed — returns query string unchanged (typecheck hook later) */
+static inline MakoString mako_sql_query(MakoString q) { return q; }
+
+/* Optional GC arena flag seed — just an arena alias */
+static inline MakoArena mako_gc_arena_new(void) { return mako_arena_new(); }
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MAKO_STD_H */

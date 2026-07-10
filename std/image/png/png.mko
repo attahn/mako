@@ -1,0 +1,6 @@
+fn available() -> int { return png_available() }
+fn encode_gray(w: int, h: int, pixels: string) -> string { return png_encode_gray(w, h, pixels) }
+fn encode_rgb(w: int, h: int, pixels: string) -> string { return png_encode_rgb(w, h, pixels) }
+fn decode_gray(png: string) -> string { return png_decode_gray(png) }
+fn width(png: string) -> int { return png_width(png) }
+fn height(png: string) -> int { return png_height(png) }

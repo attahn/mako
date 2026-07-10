@@ -1,0 +1,32 @@
+// Security helpers: const_eq, header validation, secret wipe, unsafe index.
+fn TestConstEq() {
+    assert(const_eq("token-abc", "token-abc") == 1)
+    assert(const_eq("token-abc", "token-xyz") == 0)
+    assert(crypto_eq("a", "a") == 1)
+    assert(crypto_eq("a", "b") == 0)
+    assert(const_eq("", "") == 1)
+}
+
+fn TestHttpHeaderOk() {
+    assert(http_header_ok("X-Token", "abc") == 1)
+    assert(http_header_ok("X-Token", "abc\r\nInjected: 1") == 0)
+    assert(http_header_ok("Bad\nName", "v") == 0)
+    assert(http_header_ok("Name:WithColon", "v") == 0)
+    assert(http_header_ok("Ok Name", "v") == 0)
+}
+
+fn TestSecretDrop() {
+    let s = secret_from_str("super-secret-token")
+    secret_drop(s)
+}
+
+fn TestUnsafeIndex() {
+    let xs = make([]int, 3)
+    xs[0] = 10
+    xs[1] = 20
+    xs[2] = 30
+    unsafe {
+        let v = unsafe_index(xs, 1)
+        assert(v == 20)
+    }
+}

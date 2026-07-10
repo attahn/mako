@@ -1,0 +1,23 @@
+struct Addr {
+    city: string
+    zip: int
+}
+
+struct Person {
+    name: string
+    addr: Addr
+}
+
+fn TestNestedStructLit() {
+    let mut p = Person {
+        name: "Ada",
+        addr: Addr { city: "Paris", zip: 75001 }
+    }
+    assert_eq_str(p.name, "Ada")
+    assert_eq_str(p.addr.city, "Paris")
+    assert_eq(p.addr.zip, 75001)
+    p.addr.city = "Lyon"
+    p.addr.zip = 69001
+    assert_eq_str(p.addr.city, "Lyon")
+    assert_eq(p.addr.zip, 69001)
+}

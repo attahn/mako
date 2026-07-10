@@ -1,0 +1,10 @@
+// share_int is refcounted: clone bumps, drop frees at zero.
+fn main() {
+    share let a = share_int(7)
+    share let b = share_clone(a)
+    print_int(share_get(a))
+    print_int(share_get(b))
+    share_drop(a)
+    print_int(share_get(b))
+    share_drop(b)
+}

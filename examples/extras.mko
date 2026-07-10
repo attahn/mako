@@ -1,0 +1,40 @@
+// Verified stdlib extras: JSON, sha256, share/RC, slice, safe_add, metrics, log
+
+fn main() {
+    let j = json_object("lang", "mako")
+    print(j)
+    print_int(json_has(j, "lang", "mako"))
+
+    let h = sha256("mako")
+    print_int(str_len(h))
+
+    let mac = hmac_sha256("key", "msg")
+    print_int(str_len(mac))
+
+    print(bin_encode_int(255))
+
+    log_info("hello log")
+    metric_inc(0)
+    metric_inc(0)
+    print_int(metric_get(0))
+
+    hold let x = 7
+    share let s = share_int(x)
+    let s2 = share_clone(s)
+    print_int(share_get(s2))
+    share_drop(s2)
+    share_drop(s)
+
+    let xs = [10, 20, 30, 40]
+    let v = slice_ints(xs, 1, 3)
+    print_int(slice_len(v))
+    print_int(slice_get(v, 0))
+
+    print_int(safe_add(100, 23))
+
+    let q = sql_query("select 1")
+    print(q)
+
+    let _ = grpc_stub_ping()
+    let _ = queue_stub_ping()
+}

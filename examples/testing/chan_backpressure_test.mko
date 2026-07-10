@@ -1,0 +1,29 @@
+fn TestChanTrySendLenCap() {
+    let ch = chan_new(2)
+    assert_eq(chan_cap(ch), 2)
+    assert_eq(chan_len(ch), 0)
+
+    assert_eq(chan_try_send(ch, 10), 1)
+    assert_eq(chan_len(ch), 1)
+    assert_eq(chan_try_send(ch, 20), 1)
+    assert_eq(chan_len(ch), 2)
+
+    let t0 = now_ms()
+    assert_eq(chan_try_send(ch, 30), 0)
+    let elapsed = elapsed_ms(t0)
+    assert(elapsed < 50)
+    assert_eq(chan_len(ch), 2)
+
+    assert_eq(ch.recv(), 10)
+    assert_eq(chan_len(ch), 1)
+    assert_eq(chan_try_send(ch, 30), 1)
+    assert_eq(chan_len(ch), 2)
+}
+
+fn TestChanTrySendClosed() {
+    let ch = chan_new(1)
+    assert_eq(chan_try_send(ch, 1), 1)
+    ch.close()
+    assert_eq(chan_try_send(ch, 2), 0)
+    assert_eq(chan_len(ch), 1)
+}

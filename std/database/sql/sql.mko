@@ -1,0 +1,6 @@
+fn open_sqlite(path: string) -> SqlDB { return sql_open_sqlite(path) }
+fn open_postgres(url: string) -> SqlDB { return sql_open_postgres(url) }
+fn ok(db: SqlDB) -> int { return sql_ok(db) }
+fn close(db: SqlDB) -> int { return sql_close(db) }
+fn query_int(db: SqlDB, sql: string, args: []int) -> int { return sql_query_int(db, sql, args) }
+fn exec(db: SqlDB, sql: string, args: []int) -> int { return sql_exec(db, sql, args) }

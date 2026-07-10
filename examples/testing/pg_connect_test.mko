@@ -1,0 +1,16 @@
+fn TestPgConnectDown() {
+    // Real Partial: libpq linked when present; server down → pg_ok == 0 (not fake success).
+    let c = pg_connect("host=127.0.0.1 port=5432 dbname=mako_missing connect_timeout=1")
+    assert_eq(pg_ok(c), 0)
+    // Disconnected: pg_exec / row_count return -1; pg_close is a safe no-op.
+    assert_eq(pg_exec(c, "SELECT 1"), -1)
+    assert_eq(pg_exec_row_count(c, "SELECT 1"), -1)
+    assert_eq(pg_close(c), 0)
+}
+
+fn TestPgConnectUrl() {
+    let s = pg_connect_url("postgres://alice:secret@127.0.0.1:5432/mako")
+    assert(str_eq(s, "host=127.0.0.1 port=5432 dbname=mako user=alice password=secret"))
+    assert_eq(len(pg_connect_url("not-a-url")), 0)
+    assert_eq(len(pg_connect_url("postgres://nohost")), 0)
+}

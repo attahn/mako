@@ -1,0 +1,30 @@
+// HTTP keep-alive: ≥2 requests on one connection via http_next
+
+fn main() {
+    let fd = http_bind(18094)
+    if fd < 0 {
+        print("bind failed")
+        return
+    }
+    print("keepalive on :18094")
+    while 1 == 1 {
+        let c = http_accept(fd)
+        if c < 0 {
+            // skip
+        } else {
+            let mut live = 1
+            while live == 1 {
+                let p = http_path(c)
+                let _ = http_respond(c, 200, p)
+                if http_keepalive(c) == 1 {
+                    let n = http_next(c)
+                    if n < 0 {
+                        live = 0
+                    }
+                } else {
+                    live = 0
+                }
+            }
+        }
+    }
+}

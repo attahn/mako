@@ -1,0 +1,5 @@
+// HTTP/1.1 echo — parses method + path, replies JSON (blocks)
+fn main() {
+    print("echo server on :18081")
+    http_echo(18081)
+}

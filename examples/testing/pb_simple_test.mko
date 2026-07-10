@@ -1,0 +1,11 @@
+fn TestPbSimpleMsg() {
+    let msg = pb_encode_simple("mako", 42)
+    assert(str_eq(pb_simple_name(msg), "mako"))
+    assert_eq(pb_simple_id(msg), 42)
+    let msg2 = pb_encode_simple("", 0)
+    assert_eq(len(pb_simple_name(msg2)), 0)
+    assert_eq(pb_simple_id(msg2), 0)
+    let msg3 = pb_encode_simple("hi", 300)
+    assert(str_eq(pb_simple_name(msg3), "hi"))
+    assert_eq(pb_simple_id(msg3), 300)
+}

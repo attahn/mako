@@ -1,0 +1,35 @@
+// Strong typing — programs that must typecheck.
+
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn greet(name: string) -> string {
+    return "hi " + name
+}
+
+fn maybe(n: int) -> Option[int] {
+    if n < 0 {
+        return None
+    }
+    return Some(n)
+}
+
+fn use_opt(o: Option[int]) -> int {
+    match o {
+        Some(v) => v,
+        None => -1,
+    }
+}
+
+fn main() {
+    print_int(add(2, 3))
+    print(greet("mako"))
+    print_int(use_opt(maybe(7)))
+    print_int(use_opt(maybe(-1)))
+    let xs: List[int] = [1, 2, 3]
+    print_int(xs[1])
+    let mut n: int = 1
+    n = n + 1
+    print_int(n)
+}

@@ -1,0 +1,37 @@
+fn TestFsmRuleEncoding() {
+    let r = fsm_rule("idle", "invite", "ringing")
+    assert_eq_str(r, "idle:invite>ringing;")
+}
+
+fn TestFsmSessionTransitions() {
+    let rules = sg_gather3(
+        fsm_rule("idle", "invite", "ringing"),
+        fsm_rule("ringing", "answer", "active"),
+        fsm_rule("active", "bye", "closed")
+    )
+
+    let s1 = fsm_transition("idle", "invite", rules)
+    assert_eq_str(s1, "ringing")
+    assert_eq(fsm_is(s1, "ringing"), 1)
+    assert_eq(fsm_can(s1, "answer", rules), 1)
+    assert_eq(fsm_can(s1, "bye", rules), 0)
+
+    let s2 = fsm_transition(s1, "answer", rules)
+    assert_eq_str(s2, "active")
+
+    let rejected = fsm_transition(s2, "invite", rules)
+    assert_eq_str(rejected, "active")
+
+    let s3 = fsm_transition(s2, "bye", rules)
+    assert_eq_str(s3, "closed")
+}
+
+fn TestFsmEmptyAndMalformedRules() {
+    assert_eq(fsm_can("idle", "invite", ""), 0)
+    assert_eq_str(fsm_transition("idle", "invite", ""), "idle")
+
+    let rules = sg_gather2("broken;", fsm_rule("ready", "go", "running"))
+    assert_eq(fsm_can("ready", "go", rules), 1)
+    assert_eq_str(fsm_transition("ready", "go", rules), "running")
+    assert_eq_str(fsm_transition("ready", "stop", rules), "ready")
+}

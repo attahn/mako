@@ -1,0 +1,31 @@
+fn TestWebSocketHandshakeHelpers() {
+    let key = "dGhlIHNhbXBsZSBub25jZQ=="
+    let accept = ws_accept_key(key)
+    assert_eq_str(accept, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+
+    let req = ws_client_request("example.com", "/chat", key)
+    assert(str_contains(req, "GET /chat HTTP/1.1"))
+    assert(str_contains(req, "Host: example.com"))
+    assert(str_contains(req, "Upgrade: websocket"))
+    assert(str_contains(req, "Sec-WebSocket-Version: 13"))
+    assert_eq(ws_upgrade_request_ok(req), 1)
+
+    let resp = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n"
+    assert_eq(ws_client_accept_ok(key, resp), 1)
+    assert_eq(ws_client_accept_ok(key, "HTTP/1.1 400 Bad Request\r\n\r\n"), 0)
+}
+
+fn TestWebSocketApiSoftFailures() {
+    assert_eq(ws_accept(-1), -1)
+    assert_eq_str(ws_recv(-1, 128), "")
+    assert_eq(ws_send_text(-1, "x"), -1)
+    assert_eq(ws_send_binary(-1, "x"), -1)
+    assert_eq(ws_send_ping(-1, "x"), -1)
+    assert_eq(ws_send_close(-1, 1000, ""), -1)
+    assert_eq(ws_close(-1), 0)
+    assert_eq(ws_client_connect("127.0.0.1", 1, "/", "dGhlIHNhbXBsZSBub25jZQ=="), -1)
+    assert_eq(ws_client_send_text(-1, "x"), -1)
+    assert_eq(ws_client_send_binary(-1, "x"), -1)
+    assert_eq(ws_client_send_ping(-1, "x"), -1)
+    assert_eq(ws_last_opcode(), 0)
+}

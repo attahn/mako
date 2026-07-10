@@ -1,0 +1,41 @@
+fn TestRegexpRe2Wave7() {
+    assert(regex_match("a\\nb", "a\nb"))
+    assert(regex_match("\\x41", "A"))
+    assert(regex_match("(?:ab)+c", "ababc"))
+    assert_eq_str(regex_capture("(a)(?:b)(c)", "abc", 1), "a")
+    assert_eq_str(regex_capture("(a)(?:b)(c)", "abc", 2), "c")
+}
+
+fn TestJpegHuffGifLzwDict() {
+    let gray = "ABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGH"
+    let j = jpeg_encode_gray_huff(8, 8, gray)
+    assert(len(j) > 20)
+    assert_eq(len(jpeg_huff_block(j)), 64)
+    assert_eq_str(jpeg_decode_gray(j), gray)
+    let px = "ABCDEF"
+    let g = gif_encode_rgb_lzw(2, 1, px)
+    assert_eq_str(gif_decode_rgb_lzw(g), px)
+}
+
+fn TestTemplateGobReflectSmtp() {
+    let t = html_template_nested(
+        "{{if show}}Hi {{with name}}{{name}}{{end}}{{end}}",
+        "show", 1, "name", "Ada"
+    )
+    assert(str_contains(t, "Hi"))
+    assert(str_contains(t, "Ada"))
+    let a = ["x", "y"]
+    let enc = gob_encode_strs(a)
+    let d = gob_decode_strs(enc)
+    assert_eq(len(d), 2)
+    assert_eq_str(d[0], "x")
+    assert_eq_str(d[1], "y")
+    let rv = reflect_value_new("A:string")
+    assert_eq(reflect_value_set(rv, "A", "1"), 0)
+    let c = reflect_value_clone(rv)
+    assert_eq(reflect_value_equal(rv, c), 1)
+    let auth = smtp_auth_plain("u", "p")
+    assert(str_contains(auth, "AUTH PLAIN "))
+    assert_eq(smtp_send_auth("127.0.0.1", 1, "u", "p", "a@b.com", "c@d.com", "x"), -1)
+    let _ = smtp_starttls_available()
+}

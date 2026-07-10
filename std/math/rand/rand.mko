@@ -1,0 +1,3 @@
+fn seed(s: int) { rand_seed(s) }
+fn intn(n: int) -> int { return rand_intn(n) }
+fn float() -> float { return rand_float() }

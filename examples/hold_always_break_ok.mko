@@ -1,0 +1,10 @@
+// Always-break loop: body cannot re-enter header — no false loop-carried move.
+fn consume(t: string) {}
+
+fn main() {
+    hold let s = "hi"
+    while true {
+        consume(s)
+        break
+    }
+}

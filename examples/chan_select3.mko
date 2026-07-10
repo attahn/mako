@@ -1,0 +1,27 @@
+// N-way channel select (3 channels)
+
+fn sender(ch: chan[int], v: int, delay: int) -> int {
+    sleep_ms(delay)
+    let _ = ch.send(v)
+    return 0
+}
+
+fn main() {
+    let a = chan_new(2)
+    let b = chan_new(2)
+    let c = chan_new(2)
+    crew t {
+        let _ = t.kick(sender(a, 10, 40))
+        let _ = t.kick(sender(b, 20, 20))
+        let _ = t.kick(sender(c, 30, 60))
+        let w1 = chan_select3(a, b, c, 500)
+        print_int(w1)
+        print_int(chan_select_value())
+        let w2 = chan_select3(a, b, c, 500)
+        print_int(w2)
+        print_int(chan_select_value())
+        let w3 = chan_select3(a, b, c, 500)
+        print_int(w3)
+        print_int(chan_select_value())
+    }
+}

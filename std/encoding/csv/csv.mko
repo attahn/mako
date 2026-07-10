@@ -1,0 +1,2 @@
+fn split_line(line: string) -> []string { return csv_split_line(line) }
+fn join_row(fields: []string) -> string { return csv_join_row(fields) }

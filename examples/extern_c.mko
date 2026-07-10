@@ -1,0 +1,9 @@
+// extern "C" — links runtime/mako_extern_demo.c (real unmangled call)
+
+extern "C" fn mako_c_abs(n: int) -> int
+extern "C" fn mako_c_add(a: int, b: int) -> int
+
+fn main() {
+    print_int(mako_c_abs(0 - 42))
+    print_int(mako_c_add(20, 22))
+}

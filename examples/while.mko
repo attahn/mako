@@ -1,0 +1,16 @@
+// while cond { ... } — condition must be bool
+
+fn main() {
+    let mut i = 0
+    while i < 5 {
+        print_int(i)
+        i = i + 1
+    }
+
+    let s = "mako"
+    let mut j = 0
+    while j < len(s) {
+        print_int(int(s[j]))
+        j = j + 1
+    }
+}

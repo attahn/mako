@@ -1,0 +1,6 @@
+import "./import_ns_lib.mko" as lib
+
+fn main() {
+    print_int(lib.add(10, 32))
+    print(lib.greet("ns"))
+}

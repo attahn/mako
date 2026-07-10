@@ -1,0 +1,15 @@
+// Crew cancel joins all kicked tasks — no orphans after cancel policy.
+fn work(n: int) -> int {
+    return n * n
+}
+
+fn TestCancelJoin() {
+    crew c {
+        let a = c.kick(work(4))
+        assert(a.join() == 16)
+        c.cancel()
+        assert(c.cancelled())
+        let b = c.kick(work(5))
+        assert(b.join() == 0)
+    }
+}

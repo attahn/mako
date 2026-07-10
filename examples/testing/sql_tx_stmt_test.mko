@@ -1,0 +1,49 @@
+fn TestSqlTransactionsAndStatements() {
+    let db = sql_open_sqlite(":memory:")
+    assert_eq(sql_ok(db), 1)
+
+    let empty = make([]int, 0)
+    let begin = sql_begin(db)
+    if begin == 0 {
+        assert_eq(sql_commit(db), 0)
+        assert_eq(sql_begin(db), 0)
+        assert_eq(sql_rollback(db), 0)
+    } else {
+        assert_eq(begin, -1)
+    }
+
+    let stmt = sql_prepare(db, "select ?")
+    assert(stmt > 0)
+    let args = make([]int, 1)
+    args[0] = 42
+    let got = sql_stmt_query_int(stmt, args)
+    if got != 42 {
+        assert_eq(got, -1)
+    }
+    assert_eq(sql_stmt_close(stmt), 1)
+    assert_eq(sql_stmt_close(stmt), 0)
+
+    let exec_stmt = sql_prepare(db, "select 7")
+    assert(exec_stmt > 0)
+    let rc = sql_stmt_exec(exec_stmt, empty)
+    assert(rc == 0 || rc == -1)
+    assert_eq(sql_stmt_close(exec_stmt), 1)
+
+    let _ = sql_close(db)
+}
+
+fn TestSqlStatementInvalidAndPostgresDown() {
+    let empty = make([]int, 0)
+    assert_eq(sql_stmt_query_int(0, empty), -1)
+    assert_eq(sql_stmt_exec(0, empty), -1)
+    assert_eq(sql_stmt_close(0), 0)
+
+    let pg = sql_open_postgres("postgres://127.0.0.1:1/none")
+    if sql_ok(pg) == 0 {
+        assert_eq(sql_prepare(pg, "select ?"), 0)
+        assert_eq(sql_begin(pg), -1)
+        assert_eq(sql_commit(pg), -1)
+        assert_eq(sql_rollback(pg), -1)
+    }
+    let _ = sql_close(pg)
+}

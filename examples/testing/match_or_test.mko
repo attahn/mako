@@ -1,0 +1,14 @@
+fn classify(n: int) -> int {
+    match n {
+        0 | 1 => 10,
+        2 | 3 | 4 => 20,
+        _ => -1,
+    }
+}
+
+fn TestMatchOr() {
+    assert_eq(classify(0), 10)
+    assert_eq(classify(1), 10)
+    assert_eq(classify(3), 20)
+    assert_eq(classify(9), -1)
+}

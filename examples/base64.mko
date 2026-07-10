@@ -1,0 +1,6 @@
+fn main() {
+    let e = base64_encode("hi")
+    print(e)
+    let d = base64_decode(e)
+    print(d)
+}

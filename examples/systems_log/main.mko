@@ -1,0 +1,49 @@
+// Systems sketch: durable append-only event log with arena-scoped read buffer.
+// Uses hold for owned path strings, arenas for temporary decode, append_file
+// for persistence. See docs/GUIDE.md (Systems programming).
+
+fn log_path() -> string {
+    return "/tmp/mako_systems_events.log"
+}
+
+fn log_reset() {
+    let _ = remove_file(log_path())
+}
+
+fn log_append(event: string) -> int {
+    let mut b = str_builder()
+    builder_write(b, event)
+    builder_write(b, "\n")
+    return append_file(log_path(), builder_string(b))
+}
+
+fn log_count() -> int {
+    let raw = read_file(log_path())
+    if str_eq(raw, "") {
+        return 0
+    }
+    let data = bytes(raw)
+    let mut n = 0
+    let mut i = 0
+    while i < len(data) {
+        if int(data[i]) == 10 {
+            n = n + 1
+        }
+        i = i + 1
+    }
+    return n
+}
+
+fn main() {
+    log_reset()
+    hold let p = log_path()
+    let _ = p
+    arena a {
+        let _scratch = arena_text(a, "decode")
+        let _ = _scratch
+    }
+    let _ = log_append("boot")
+    let _ = log_append("ready")
+    let _ = log_append("done")
+    print_int(log_count())
+}

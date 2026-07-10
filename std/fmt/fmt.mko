@@ -1,0 +1,5 @@
+fn sprintf(fmt: string, arg: string) -> string { return fmt_sprintf(fmt, arg) }
+fn sprintf_d(fmt: string, arg: int) -> string { return fmt_sprintf_d(fmt, arg) }
+fn int(n: int) -> string { return format_int(n) }
+fn bool(b: bool) -> string { return format_bool(b) }
+fn float(v: float, prec: int) -> string { return format_float(v, prec) }

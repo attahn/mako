@@ -1,0 +1,5 @@
+fn main() {
+    let e = pb_encode_varint(300)
+    print_int(pb_decode_varint(e))
+    print_int(pb_varint_len(e))
+}

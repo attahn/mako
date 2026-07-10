@@ -1,0 +1,7 @@
+interface Reader {
+    fn read() -> int
+}
+
+fn main() {
+    print("no Reader_read")
+}

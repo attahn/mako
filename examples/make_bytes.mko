@@ -1,0 +1,31 @@
+// []byte("lit") sugar, make([]T, n[, cap]), compile-time int8/byte range.
+
+fn main() {
+    let b = []byte("Hi!")
+    print(string(b))
+    print_int(len(b))
+
+    let c = bytes("mako")
+    print(string([]byte(c)))
+
+    let s = make([]int, 3, 8)
+    print_int(len(s))
+    print_int(cap(s))
+    s[0] = 10
+    s[1] = 20
+    s[2] = 30
+    print_int(s[1])
+
+    let z = make([]byte, 2)
+    print_int(len(z))
+    print_int(cap(z))
+    z[0] = 65
+    z[1] = 66
+    print(string(z))
+
+    // in-range literal casts OK at check time
+    let x = int8(127)
+    let y = byte(255)
+    print_int8(x)
+    print_int(int(y))
+}

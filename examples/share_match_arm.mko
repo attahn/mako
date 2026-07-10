@@ -1,0 +1,12 @@
+// Match-arm share join: share last-used on both arms → mut after match OK.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    let n = match 1 {
+        0 => share_get(s)
+        _ => share_get(s)
+    }
+    print_int(n)
+    x = 2
+    print_int(x)
+}

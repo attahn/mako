@@ -1,0 +1,2 @@
+fn escape(s: string) -> string { return xml_escape(s) }
+fn tag_text(xml: string, tag: string) -> string { return xml_tag_text(xml, tag) }

@@ -1,0 +1,7 @@
+fn main() {
+    let r = uuid_check("not-valid")
+    match r {
+        Ok(_) => print("unexpected")
+        Err(e) => print(e)
+    }
+}

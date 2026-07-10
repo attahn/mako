@@ -1,0 +1,55 @@
+fn TestRingBufferWraparound() {
+    let r = ring_new(3)
+    assert(r > 0)
+    assert_eq(ring_cap(r), 3)
+    assert_eq(ring_len(r), 0)
+    assert_eq(ring_pop(r), 0)
+
+    assert_eq(ring_push(r, 10), 1)
+    assert_eq(ring_push(r, 20), 1)
+    assert_eq(ring_push(r, 30), 1)
+    assert_eq(ring_push(r, 40), 0)
+    assert_eq(ring_len(r), 3)
+    assert_eq(ring_peek(r), 10)
+    assert_eq(ring_pop(r), 10)
+    assert_eq(ring_push(r, 40), 1)
+    assert_eq(ring_pop(r), 20)
+    assert_eq(ring_pop(r), 30)
+    assert_eq(ring_pop(r), 40)
+    assert_eq(ring_pop(r), 0)
+    assert_eq(ring_len(r), 0)
+}
+
+fn TestLockFreeQueueSeed() {
+    let q = lfq_new(2)
+    assert(q > 0)
+    assert_eq(lfq_try_push(q, 7), 1)
+    assert_eq(lfq_try_push(q, 8), 1)
+    assert_eq(lfq_try_push(q, 9), 0)
+    assert_eq(lfq_len(q), 2)
+    assert_eq(lfq_try_pop(q), 7)
+    assert_eq(lfq_try_pop(q), 8)
+    assert_eq(lfq_try_pop(q), 0)
+    assert_eq(lfq_len(q), 0)
+}
+
+fn TestScatterGatherHelpers() {
+    let a = sg_gather2("ma", "ko")
+    assert_eq_str(a, "mako")
+
+    let b = sg_gather3("ab", "cd", "ef")
+    assert_eq_str(b, "abcdef")
+    assert_eq_str(sg_slice(b, 2, 3), "cde")
+    assert_eq_str(sg_slice(b, -5, 2), "ab")
+    assert_eq_str(sg_slice(b, 4, 99), "ef")
+    assert_eq_str(sg_slice(b, 99, 2), "")
+}
+
+fn TestInvalidHandles() {
+    assert_eq(ring_new(0), 0)
+    assert_eq(ring_len(0), 0)
+    assert_eq(ring_cap(0), 0)
+    assert_eq(ring_push(0, 1), 0)
+    assert_eq(ring_peek(0), 0)
+    assert_eq(ring_pop(0), 0)
+}

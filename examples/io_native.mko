@@ -1,0 +1,38 @@
+// Portable native poll: kqueue on Darwin, epoll on Linux (ifdef), select elsewhere.
+
+fn connect_b() -> int {
+    sleep_ms(30)
+    let c = tcp_connect("127.0.0.1", 18132)
+    let _ = tcp_close(c)
+    return 0
+}
+
+fn main() {
+    let a = tcp_listen(18131)
+    let b = tcp_listen(18132)
+    if a < 0 {
+        print("listen failed")
+        return
+    }
+
+    let idle = io_native_poll2(a, b, 40)
+    print_int(idle)
+
+    crew t {
+        let _ = t.kick(connect_b())
+        let which = io_native_poll2(a, b, 500)
+        print_int(which)
+        if which == 1 {
+            let client = tcp_accept_nb(b)
+            let _ = tcp_close(client)
+            print("native ready b")
+        }
+        if which < 0 {
+            print("native timeout")
+        }
+    }
+
+    let _ = tcp_close(a)
+    let _ = tcp_close(b)
+    print("io_native done")
+}

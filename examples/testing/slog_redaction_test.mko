@@ -1,0 +1,8 @@
+fn TestSlogRedact() {
+    let secret = slog_redact("token-123")
+    assert_eq_str(secret, "[REDACTED]")
+}
+
+fn TestSlogWithRedacted() {
+    slog_with_redacted("info", "login", "token")
+}

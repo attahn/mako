@@ -1,0 +1,5 @@
+// Path dep `helper` from mako.toml is merged at compile time as helper.fn(...).
+fn main() {
+    print_int(helper.add(20, 22))
+    print(helper.greet("path-dep"))
+}

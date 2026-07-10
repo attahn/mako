@@ -1,0 +1,213 @@
+{
+  "name": "mako-vscode",
+  "displayName": "Mako",
+  "description": "VS Code support for the Mako programming language.",
+  "version": "0.1.0",
+  "publisher": "mako-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters",
+    "Debuggers"
+  ],
+  "activationEvents": [
+    "onLanguage:mako",
+    "onCommand:mako.check",
+    "onCommand:mako.build",
+    "onCommand:mako.run",
+    "onCommand:mako.test",
+    "onCommand:mako.format",
+    "onCommand:mako.initProject",
+    "onCommand:mako.debugActiveFile",
+    "onCommand:mako.restartLanguageServer",
+    "onDebugResolve:mako-native"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mako",
+        "aliases": [
+          "Mako",
+          "mako"
+        ],
+        "extensions": [
+          ".mko"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mako",
+        "scopeName": "source.mako",
+        "path": "./syntaxes/mako.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mako.check",
+        "title": "Mako: Check"
+      },
+      {
+        "command": "mako.build",
+        "title": "Mako: Build"
+      },
+      {
+        "command": "mako.run",
+        "title": "Mako: Run"
+      },
+      {
+        "command": "mako.test",
+        "title": "Mako: Test"
+      },
+      {
+        "command": "mako.format",
+        "title": "Mako: Format Current File"
+      },
+      {
+        "command": "mako.initProject",
+        "title": "Mako: Initialize Project"
+      },
+      {
+        "command": "mako.debugActiveFile",
+        "title": "Mako: Debug Active File"
+      },
+      {
+        "command": "mako.restartLanguageServer",
+        "title": "Mako: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "Mako",
+      "properties": {
+        "mako.path": {
+          "type": "string",
+          "default": "mako",
+          "description": "Path to the Mako compiler executable."
+        },
+        "mako.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the built-in Mako language server client for diagnostics, hover, completion, definitions, references, rename, code actions, symbols, and signature help."
+        },
+        "mako.debug.adapter": {
+          "type": "string",
+          "default": "lldb",
+          "enum": [
+            "lldb",
+            "cppdbg"
+          ],
+          "description": "Native debugger adapter used for Mako launch configs. Use lldb with CodeLLDB or cppdbg with Microsoft C/C++."
+        }
+      }
+    },
+    "debuggers": [
+      {
+        "type": "mako-native",
+        "label": "Mako Native",
+        "languages": [
+          "mako"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [],
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "Mako source file to build before launching."
+              },
+              "program": {
+                "type": "string",
+                "description": "Native binary path. Defaults to ${workspaceFolder}/${fileBasenameNoExtension}."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the launched process."
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Arguments passed to the launched binary."
+              },
+              "adapter": {
+                "type": "string",
+                "enum": [
+                  "lldb",
+                  "cppdbg"
+                ],
+                "description": "Native adapter to delegate to."
+              }
+            }
+          }
+        },
+        "configurationSnippets": [
+          {
+            "label": "Mako: Debug active file",
+            "description": "Build the active .mko file, then launch the native binary with LLDB.",
+            "body": {
+              "type": "mako-native",
+              "request": "launch",
+              "name": "Mako: Debug active file",
+              "source": "${file}",
+              "program": "${workspaceFolder}/${fileBasenameNoExtension}",
+              "cwd": "${workspaceFolder}",
+              "args": []
+            }
+          }
+        ]
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "mako",
+        "owner": "mako",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "mako",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Mako command to run: check, build, run, or test."
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional arguments for the Mako command."
+          }
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "mako",
+        "path": "./snippets/mako.code-snippets"
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+fn matches(pat: string, text: string) -> bool { return regex_match(pat, text) }
+fn find(pat: string, text: string) -> string { return regex_find(pat, text) }
+fn capture(pat: string, text: string, n: int) -> string { return regex_capture(pat, text, n) }
+fn find_all(pat: string, text: string, limit: int) -> []string { return regex_find_all(pat, text, limit) }
+fn replace(pat: string, text: string, repl: string) -> string { return regex_replace(pat, text, repl) }
+fn replace_all(pat: string, text: string, repl: string) -> string { return regex_replace_all(pat, text, repl) }
+fn valid(pat: string) -> int { return regex_valid(pat) }
+fn quote_meta(s: string) -> string { return regex_quote_meta(s) }

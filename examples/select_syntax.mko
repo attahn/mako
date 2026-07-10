@@ -1,0 +1,36 @@
+// select { } syntax — lowers to chan_select2/3
+
+fn sender(ch: chan[int], v: int, delay: int) -> int {
+    sleep_ms(delay)
+    let _ = ch.send(v)
+    return 0
+}
+
+fn main() {
+    let a = chan_new(2)
+    let b = chan_new(2)
+    crew t {
+        let _ = t.kick(sender(a, 11, 40))
+        let _ = t.kick(sender(b, 22, 15))
+        select timeout 500 {
+            a => {
+                print("got a")
+                print_int(chan_select_value())
+            }
+            b => {
+                print("got b")
+                print_int(chan_select_value())
+            }
+        }
+        select timeout 500 {
+            a => {
+                print("got a")
+                print_int(chan_select_value())
+            }
+            b => {
+                print("got b")
+                print_int(chan_select_value())
+            }
+        }
+    }
+}

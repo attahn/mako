@@ -1,0 +1,17 @@
+fn TestSseEventAndRetry() {
+    let evt = sse_event("update", "line1\nline2")
+    assert(str_contains(evt, "event: update\n"))
+    assert(str_contains(evt, "data: line1\n"))
+    assert(str_contains(evt, "data: line2\n\n"))
+
+    let retry = sse_retry(1500)
+    assert(str_eq(retry, "retry: 1500\n\n"))
+}
+
+fn TestRpcFrameHelpers() {
+    let payload = json_object("status", "ok")
+    let frame = rpc_frame("Health.Check", payload)
+    assert(str_contains(frame, "\"method\":\"Health.Check\""))
+    assert(str_eq(rpc_method(frame), "Health.Check"))
+    assert(str_contains(rpc_payload(frame), "\"status\":\"ok\""))
+}

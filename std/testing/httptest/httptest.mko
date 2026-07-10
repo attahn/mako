@@ -1,0 +1,4 @@
+fn serve_once(port: int, body: string) -> int { return httptest_serve_once(port, body) }
+fn get(url: string) -> string { return httptest_get(url) }
+fn status() -> int { return httptest_status() }
+fn header(name: string) -> string { return httptest_header(name) }

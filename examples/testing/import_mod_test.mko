@@ -1,0 +1,6 @@
+import "../import_lib.mko"
+
+fn TestImportMod() {
+    assert_eq(lib_add(2, 40), 42)
+    assert_eq_str(lib_greet("m"), "hi m")
+}

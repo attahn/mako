@@ -1,0 +1,6 @@
+// hold move-check: after `hold let y = x` on non-Copy, using x is illegal.
+fn main() {
+    hold let x = "hi"
+    hold let y = x
+    print(y)
+}

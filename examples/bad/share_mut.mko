@@ -1,0 +1,4 @@
+fn main() {
+    share let mut x = 1
+    x = 2
+}

@@ -1,0 +1,67 @@
+// select default arm + 4 channels (Partial — lowers to mako_chan_selectn).
+
+fn sender(ch: chan[int], v: int, delay: int) -> int {
+    sleep_ms(delay)
+    let _ = ch.send(v)
+    return 0
+}
+
+fn main() {
+    let a = chan_new(2)
+    let b = chan_new(2)
+    let c = chan_new(2)
+    let d = chan_new(2)
+
+    // Idle select — default fires
+    select timeout 30 {
+        a => {
+            print("unexpected a")
+        }
+        b => {
+            print("unexpected b")
+        }
+        default => {
+            print("default ok")
+        }
+    }
+
+    crew t {
+        let _ = t.kick(sender(a, 11, 50))
+        let _ = t.kick(sender(b, 22, 20))
+        let _ = t.kick(sender(c, 33, 35))
+        let _ = t.kick(sender(d, 44, 10))
+
+        select timeout 500 {
+            a => {
+                print("got a")
+                print_int(chan_select_value())
+            }
+            b => {
+                print("got b")
+                print_int(chan_select_value())
+            }
+            c => {
+                print("got c")
+                print_int(chan_select_value())
+            }
+            d => {
+                print("got d")
+                print_int(chan_select_value())
+            }
+            _ => {
+                print("timeout")
+            }
+        }
+
+        // Drain remaining with chan_select4
+        let w2 = chan_select4(a, b, c, d, 500)
+        print_int(w2)
+        print_int(chan_select_value())
+        let w3 = chan_select4(a, b, c, d, 500)
+        print_int(w3)
+        print_int(chan_select_value())
+        let w4 = chan_select4(a, b, c, d, 500)
+        print_int(w4)
+        print_int(chan_select_value())
+    }
+}

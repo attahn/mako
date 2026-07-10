@@ -1,0 +1,12 @@
+fn TestHttp2HeaderBlock() {
+    let h1 = http2_headers_frame(1, "aa", 0)
+    let c1 = http2_continuation_frame(1, "bb", 0)
+    let c2 = http2_continuation_frame(1, "cc", 4)
+    let buf = http2_concat_frames(http2_concat_frames(h1, c1), c2)
+    let block = http2_header_block(buf, 1)
+    assert(str_eq(block, "aabbcc"))
+    assert_eq(len(http2_header_block(buf, 3)), 0)
+
+    let alone = http2_headers_frame(2, "xyz", 4)
+    assert(str_eq(http2_header_block(alone, 2), "xyz"))
+}

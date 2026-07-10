@@ -1,0 +1,17 @@
+// Nested if inside while: share ends on both arms → mut after if (still in loop) OK.
+fn main() {
+    let mut x = 1
+    let mut i = 0
+    while i < 2 {
+        if i == 0 {
+            share let s = share_int(x)
+            print_int(share_get(s))
+        } else {
+            share let s = share_int(x)
+            print_int(share_get(s))
+        }
+        x = x + 1
+        i = i + 1
+    }
+    print_int(x)
+}

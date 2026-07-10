@@ -1,0 +1,7 @@
+fn must_return() -> int {
+    print("forgot")
+}
+
+fn main() {
+    print_int(must_return())
+}

@@ -1,0 +1,12 @@
+// Must fail: share still live after match (used on both arms) while mutating.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    let n = match 1 {
+        0 => share_get(s)
+        _ => share_get(s)
+    }
+    x = 2
+    print_int(share_get(s))
+    print_int(n)
+}

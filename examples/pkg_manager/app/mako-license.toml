@@ -1,0 +1,8 @@
+# Offline license policy seed for `mako pkg audit`.
+
+allow = ["MIT", "Apache-2.0"]
+deny = ["GPL-3.0", "AGPL-3.0"]
+
+[licenses]
+app = "MIT"
+util = "Apache-2.0"

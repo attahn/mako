@@ -1,0 +1,31 @@
+fn TestIoBackpressurePolicy() {
+    assert_eq(io_backoff_ms(0, 5, 80), 5)
+    assert_eq(io_backoff_ms(1, 5, 80), 10)
+    assert_eq(io_backoff_ms(4, 5, 80), 80)
+    assert_eq(io_backoff_ms(8, 5, 80), 80)
+
+    assert_eq(io_should_pause(0, 100, 0), 0)
+    assert_eq(io_should_pause(10, 100, 0), 1)
+    assert_eq(io_should_pause(100, 100, 1), 1)
+    assert_eq(io_should_pause(10, 100, 1), 0)
+}
+
+fn TestIoReadWriteReadiness() {
+    let a = unix_socket_pair()
+    let b = unix_socket_pair_peer()
+    if a < 0 || b < 0 {
+        return
+    }
+
+    assert_eq(io_read_ready(a, 0), 0)
+    assert_eq(io_write_ready(a, 0), 1)
+    assert_eq(io_set_nonblocking(a, 1), 1)
+    assert_eq(io_set_nonblocking(b, 1), 1)
+
+    assert_eq(io_try_write(b, "hello"), 5)
+    assert_eq(io_read_ready(a, 50), 1)
+    assert_eq_str(unix_read(a, 16), "hello")
+
+    unix_close(a)
+    unix_close(b)
+}

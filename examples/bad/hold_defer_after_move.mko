@@ -1,0 +1,7 @@
+// Must fail: defer body runs at exit after hold was moved.
+fn main() {
+    hold let x = "hi"
+    defer print(x)
+    let y = x
+    print(y)
+}

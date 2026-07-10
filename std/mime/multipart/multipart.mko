@@ -1,0 +1,4 @@
+fn boundary(content_type: string) -> string { return multipart_boundary(content_type) }
+fn form_value(body: string, boundary: string, name: string) -> string {
+    return multipart_form_value(body, boundary, name)
+}

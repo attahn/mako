@@ -1,0 +1,42 @@
+fn TestHttp2FlowControl() {
+    let _ = http2_conn_reset()
+    assert_eq(http2_window_conn(), 65535)
+    assert_eq(http2_window_blocked(0), 0)
+    // Open stream 1 via HEADERS apply
+    let h = http2_headers_frame(1, "x", 4)
+    assert_eq(http2_stream_apply(h), 1)
+    assert_eq(http2_window_of(1), 65535)
+    assert_eq(http2_window_consume(1, 100), 0)
+    assert_eq(http2_window_of(1), 65435)
+    assert_eq(http2_window_conn(), 65435)
+    // Drain connection window
+    assert_eq(http2_window_consume(0, 65435), 0)
+    assert_eq(http2_window_conn(), 0)
+    assert_eq(http2_window_blocked(0), 1)
+    assert_eq(http2_window_consume(1, 1), -1)
+    // WINDOW_UPDATE on connection
+    let w = http2_window_update_frame(0, 50)
+    assert_eq(http2_conn_recv(w), 0)
+    assert_eq(http2_window_conn(), 50)
+    assert_eq(http2_window_blocked(0), 0)
+    // Stream WINDOW_UPDATE
+    let ws = http2_window_update_frame(1, 10)
+    assert_eq(http2_conn_recv(ws), 0)
+    assert_eq(http2_window_of(1), 65445)
+    let _ = http2_conn_reset()
+}
+
+fn TestHttp2ConnRecvDataWindow() {
+    // Inbound DATA via conn_recv decreases stream + connection windows.
+    let _ = http2_conn_reset()
+    assert_eq(http2_conn_recv(http2_headers_frame(1, hpack_encode_indexed(2), 4)), 0)
+    assert_eq(http2_window_of(1), 65535)
+    assert_eq(http2_window_conn(), 65535)
+    assert_eq(http2_conn_recv(http2_data_frame(1, "hello", 0)), 0)
+    assert_eq(http2_window_of(1), 65530)
+    assert_eq(http2_window_conn(), 65530)
+    // WINDOW_UPDATE restores stream window
+    assert_eq(http2_conn_recv(http2_window_update_frame(1, 5)), 0)
+    assert_eq(http2_window_of(1), 65535)
+    let _ = http2_conn_reset()
+}

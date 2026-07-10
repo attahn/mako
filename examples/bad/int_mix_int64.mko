@@ -1,0 +1,6 @@
+// Must fail: cannot mix int and int64 without conversion
+fn main() {
+    let a: int = 1
+    let b: int64 = 2
+    print_int(a + b)
+}

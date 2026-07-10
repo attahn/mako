@@ -1,0 +1,14 @@
+// Must succeed: match inside while does not touch hold → no loop-carried move.
+fn main() {
+    hold let x = "hi"
+    let mut i = 0
+    while i < 2 {
+        let n = match i {
+            0 => 1
+            _ => 2
+        }
+        print_int(n)
+        i = i + 1
+    }
+    print(x)
+}

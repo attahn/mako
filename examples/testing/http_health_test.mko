@@ -1,0 +1,12 @@
+fn TestHealthJsonReady() {
+    let body = http_health_json("orders", 1)
+    assert(str_contains(body, "\"ok\":true"))
+    assert(str_contains(body, "\"status\":\"ready\""))
+    assert(str_contains(body, "\"service\":\"orders\""))
+}
+
+fn TestHealthJsonNotReady() {
+    let body = http_health_json("orders", 0)
+    assert(str_contains(body, "\"ok\":false"))
+    assert(str_contains(body, "\"status\":\"not_ready\""))
+}

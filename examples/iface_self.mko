@@ -1,0 +1,19 @@
+// Interface method with self (receiver passed as first arg)
+
+struct Counter {
+    n: int
+}
+
+interface Adder {
+    fn add(int) -> int
+}
+
+fn Adder_add(self: Counter, delta: int) -> int {
+    return self.n + delta
+}
+
+fn main() {
+    let c = Counter { n: 10 }
+    print_int(c.add(5))
+    print_int(Adder_add(c, 7))
+}

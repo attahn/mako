@@ -1,0 +1,17 @@
+// Arena-backed []Struct via make inside arena
+
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    arena a {
+        let mut xs = make([]Point, 2, 4)
+        xs[0] = Point { x: 1, y: 2 }
+        xs[1] = Point { x: 3, y: 4 }
+        print_int(len(xs))
+        print_int(xs[0].x)
+        print_int(xs[1].y)
+    }
+}

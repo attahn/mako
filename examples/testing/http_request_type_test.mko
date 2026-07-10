@@ -1,0 +1,23 @@
+fn TestHttpRequestParse() {
+    let raw = "POST /api/v1 HTTP/1.1\r\nHost: x\r\n\r\n{\"a\":1}"
+    let req = http_request_parse(raw)
+    assert_eq_str(http_request_method(req), "POST")
+    assert_eq_str(http_request_path(req), "/api/v1")
+    assert_eq_str(http_request_body(req), "{\"a\":1}")
+}
+
+fn TestHttpRequestGet() {
+    let req = http_request_parse("GET /health HTTP/1.1\r\n\r\n")
+    assert_eq_str(http_request_method(req), "GET")
+    assert_eq_str(http_request_path(req), "/health")
+}
+
+fn TestHttpRouteMatchAndParam() {
+    let req = http_request_parse("GET /users/42/posts/7 HTTP/1.1\r\n\r\n")
+    assert(http_route_match(req, "GET", "/users/{user}/posts/{post}"))
+    assert(not http_route_match(req, "POST", "/users/{user}/posts/{post}"))
+    assert(not http_route_match(req, "GET", "/users/{user}"))
+    assert_eq_str(http_route_param(req, "/users/{user}/posts/{post}", "user"), "42")
+    assert_eq_str(http_route_param(req, "/users/{user}/posts/{post}", "post"), "7")
+    assert_eq_str(http_route_param(req, "/users/{user}/posts/{post}", "missing"), "")
+}

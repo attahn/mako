@@ -1,0 +1,30 @@
+fn TestBufioReadLines() {
+    let r = buf_reader_from_string("one\ntwo\r\nthree")
+    assert_eq_str(buf_read_line(r), "one")
+    assert_eq_str(buf_read_line(r), "two")
+    assert_eq_str(buf_read_line(r), "three")
+    assert_eq_str(buf_read_line(r), "")
+    let _ = buf_reader_close(r)
+}
+
+fn TestBufioReadN() {
+    let r = buf_reader_from_string("abcdef")
+    assert_eq_str(buf_read(r, 3), "abc")
+    assert_eq_str(buf_read(r, 10), "def")
+    let _ = buf_reader_close(r)
+}
+
+fn TestBufioWriterRoundtrip() {
+    let path = "/tmp/mako_bufio_test.txt"
+    let w = buf_writer_new(path)
+    assert_eq(buf_write(w, "hello"), 5)
+    assert_eq(buf_write_byte(w, 10), 1)
+    assert_eq(buf_write(w, "world"), 5)
+    let _ = buf_flush(w)
+    let _ = buf_writer_close(w)
+    let r = buf_reader_new(path)
+    assert_eq_str(buf_read_line(r), "hello")
+    assert_eq_str(buf_read_line(r), "world")
+    let _ = buf_reader_close(r)
+    let _ = remove_file(path)
+}

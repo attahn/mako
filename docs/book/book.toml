@@ -1,0 +1,16 @@
+[book]
+title = "The Mako Book"
+description = "A guided tour of the Mako language — memory-safe backends without a mandatory GC"
+authors = ["Mako contributors"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "light"
+git-repository-url = "https://github.com/mako-lang/mako"
+site-url = "/book/"
+preferred-dark-theme = "navy"
+
+[output.html.fold]
+enable = true
+level = 1

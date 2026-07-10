@@ -1,0 +1,22 @@
+// HTTP/2 TLS server seed — ALPN h2, route `/` + `/health`, max 2 requests then exit.
+// Build: mako build examples/h2_server.mko -o out/h2_server
+// Curl:  curl -sk --http2 https://127.0.0.1:18446/health https://127.0.0.1:18446/
+// Smoke: ./scripts/h2-server-smoke.sh  (skips if OpenSSL / curl --http2 missing)
+// Certs: runtime/certs/dev.crt + dev.key
+// Not a full H2/gRPC stack — Partial (see docs/STATUS.md).
+
+fn main() {
+    let code = tls_serve_h2_routes(
+        18446,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "hello from mako h2\n",
+        "{\"ok\":true}\n",
+        2
+    )
+    if code != 0 {
+        print("tls_serve_h2_routes failed (OpenSSL missing or bind error)")
+        return
+    }
+    print("h2_server done")
+}

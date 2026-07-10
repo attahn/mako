@@ -1,0 +1,14 @@
+// Book sample — grouped imports (ch03 / ch07)
+import (
+    "strings"
+    "path"
+)
+
+fn main() {
+    let parts = strings.split("a,b,c", ",")
+    let s = strings.concat(parts, "-")
+    assert(str_eq(s, "a-b-c"))
+    let p = path.clean("/a/../b")
+    assert(str_eq(p, "/b"))
+    print("imports ok")
+}

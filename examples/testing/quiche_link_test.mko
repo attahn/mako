@@ -1,0 +1,127 @@
+// Quiche C ABI + optional live handshake / HTTP/3 GET against stock quiche-server.
+// Default suite: soft-skip when quiche absent OR MAKO_LIVE_QUIC unset.
+
+fn live_quic_enabled() -> int {
+    if quiche_available() == 0 {
+        return 0
+    }
+    let v = env_get("MAKO_LIVE_QUIC")
+    if str_eq(v, "1") {
+        return 1
+    }
+    if str_eq(v, "true") {
+        return 1
+    }
+    return 0
+}
+
+fn TestQuicheAvailable() {
+    if quiche_available() == 0 {
+        return
+    }
+    let v = quiche_version()
+    assert(str_len(v) > 0)
+    assert(str_contains(v, "."))
+}
+
+fn TestQuicheLiveHandshake() {
+    if live_quic_enabled() == 0 {
+        return
+    }
+    let pid = quiche_start_server(
+        18470,
+        "runtime/third_party/quiche/src/apps/src/bin/cert.crt",
+        "runtime/third_party/quiche/src/apps/src/bin/cert.key",
+        "runtime/third_party/quiche/testdata/root",
+        "quic.tech"
+    )
+    if pid == 0 {
+        return
+    }
+    sleep_ms(200)
+    let resp = quiche_handshake("127.0.0.1", 18470, "quic.tech", 0)
+    let _ = quiche_stop_server(pid)
+    assert(str_eq(resp, "quic:ok;h3"))
+}
+
+fn TestQuicheLiveH3Get() {
+    if live_quic_enabled() == 0 {
+        return
+    }
+    let pid = quiche_start_server(
+        18472,
+        "runtime/third_party/quiche/src/apps/src/bin/cert.crt",
+        "runtime/third_party/quiche/src/apps/src/bin/cert.key",
+        "runtime/third_party/quiche/testdata/root",
+        "quic.tech"
+    )
+    if pid == 0 {
+        return
+    }
+    sleep_ms(200)
+    let resp = quiche_h3_get(
+        "127.0.0.1",
+        18472,
+        "/",
+        "quic.tech",
+        0
+    )
+    let _ = quiche_stop_server(pid)
+    assert(str_eq(resp, "h3:200;mako-quic-ok"))
+}
+
+fn TestQuicheLiveH3Post() {
+    if live_quic_enabled() == 0 {
+        return
+    }
+    let pid = quiche_start_server(
+        18474,
+        "runtime/third_party/quiche/src/apps/src/bin/cert.crt",
+        "runtime/third_party/quiche/src/apps/src/bin/cert.key",
+        "runtime/third_party/quiche/testdata/root",
+        "quic.tech"
+    )
+    if pid == 0 {
+        return
+    }
+    sleep_ms(200)
+    // Stock quiche-server only serves GET files; POST proves method+body → 405.
+    let resp = quiche_h3_post(
+        "127.0.0.1",
+        18474,
+        "/",
+        "hello-post-body",
+        "quic.tech",
+        0
+    )
+    let _ = quiche_stop_server(pid)
+    assert(str_eq(resp, "h3:405;"))
+}
+
+fn TestQuicheLiveH3Mux() {
+    if live_quic_enabled() == 0 {
+        return
+    }
+    let pid = quiche_start_server(
+        18475,
+        "runtime/third_party/quiche/src/apps/src/bin/cert.crt",
+        "runtime/third_party/quiche/src/apps/src/bin/cert.key",
+        "runtime/third_party/quiche/testdata/root",
+        "quic.tech"
+    )
+    if pid == 0 {
+        return
+    }
+    sleep_ms(200)
+    // Two overlapping GETs on one H3 connection.
+    let resp = quiche_h3_get_two(
+        "127.0.0.1",
+        18475,
+        "/",
+        "/health",
+        "quic.tech",
+        0
+    )
+    let _ = quiche_stop_server(pid)
+    assert(str_eq(resp, "h3:200;mako-quic-ok|200;health"))
+}

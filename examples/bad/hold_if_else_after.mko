@@ -1,0 +1,11 @@
+// Must fail after if-else: hold may have been moved on then path.
+fn main() {
+    hold let x = "hi"
+    if 0 == 1 {
+        let y = x
+        print(y)
+    } else {
+        print(x)
+    }
+    print(x)
+}

@@ -1,0 +1,14 @@
+// Documented unary gRPC over HTTP/2 seed: request assembler + response status.
+fn main() {
+    let req = grpc_http2_unary(1, "mako", 9)
+    let framed = grpc_http2_unary_payload(req)
+    assert(str_eq(grpc_unary_name(framed), "mako"))
+    assert_eq(grpc_unary_id(framed), 9)
+
+    let resp = grpc_http2_unary_response(1, "mako", 9)
+    let out = grpc_http2_response_payload(resp)
+    assert(str_eq(grpc_unary_name(out), "mako"))
+    assert_eq(grpc_unary_id(out), 9)
+    assert_eq(grpc_http2_response_status(resp), 0)
+    print("ok")
+}

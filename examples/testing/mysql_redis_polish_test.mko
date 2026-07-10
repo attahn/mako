@@ -1,0 +1,48 @@
+fn RedisPolishMock() -> int {
+    return redis_mock_once(16382)
+}
+
+fn TestMysqlMariaDbUrlPolish() {
+    let my = mysql_connect("mysql://user:pass@127.0.0.1:3307/appdb")
+    assert_eq(mysql_ok(my), 1)
+    assert_eq(mysql_close(my), 0)
+    assert_eq(mysql_is_mariadb("mysql://127.0.0.1/appdb"), 0)
+    assert_eq_str(mysql_driver_name("mysql://127.0.0.1/appdb"), "mysql")
+    assert(str_contains(mysql_connect_url("mysql://user:pass@127.0.0.1:3307/appdb"), "port=3307"))
+    assert(str_contains(mysql_connect_url("mysql://user:pass@127.0.0.1:3307/appdb"), "db=appdb"))
+
+    let maria = mysql_connect("mariadb://127.0.0.1:3306/appdb")
+    assert_eq(mysql_ok(maria), 1)
+    assert_eq(mysql_is_mariadb("mariadb://127.0.0.1:3306/appdb"), 1)
+    assert_eq_str(mysql_driver_name("mariadb://127.0.0.1:3306/appdb"), "mariadb")
+
+    let bad = mysql_connect("postgres://127.0.0.1/db")
+    assert_eq(mysql_ok(bad), 0)
+    assert_eq_str(mysql_connect_url("postgres://127.0.0.1/db"), "")
+    assert_eq_str(mysql_driver_name("postgres://127.0.0.1/db"), "")
+}
+
+fn TestRedisUrlAndConnectionPolish() {
+    assert(str_contains(redis_connect_url("redis://:secret@127.0.0.1:6380/2"), "host=127.0.0.1"))
+    assert(str_contains(redis_connect_url("redis://:secret@127.0.0.1:6380/2"), "port=6380"))
+    assert(str_contains(redis_connect_url("redis://:secret@127.0.0.1:6380/2"), "db=2"))
+    assert(str_contains(redis_connect_url("redis://:secret@127.0.0.1:6380/2"), "auth=1"))
+
+    crew t {
+        let s = t.kick(RedisPolishMock())
+        sleep_ms(50)
+        let c = redis_connect("redis://127.0.0.1:16382")
+        if redis_ok(c) == 1 {
+            assert_eq_str(redis_conn_ping(c), "PONG")
+            assert_eq(redis_close(c), 0)
+        } else {
+            assert_eq(redis_ok(c), 0)
+        }
+        let _ = s.join()
+    }
+
+    let down = redis_connect("redis://127.0.0.1:1")
+    assert_eq(redis_ok(down), 0)
+    assert_eq_str(redis_conn_ping(down), "")
+    assert_eq(redis_close(down), 0)
+}

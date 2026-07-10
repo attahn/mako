@@ -1,0 +1,7 @@
+// Must fail: share still live (used after assign) — cannot mutate source.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    x = 2
+    print_int(share_get(s))
+}

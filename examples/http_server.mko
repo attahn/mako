@@ -1,0 +1,54 @@
+// Minimal HTTP/1.1 server — bind / accept / respond / close_listener.
+// Serves at most N requests then exits (default 50; override: `out/http_server 10`).
+// Build: mako build examples/http_server.mko -o out/http_server
+// Curl:  curl -sS http://127.0.0.1:18100/health
+// Smoke: ./scripts/http-server-smoke.sh
+// Not a framework — Partial stdlib seed (see docs/STDLIB.md).
+
+fn main() {
+    let mut max = 50
+    if argc() > 1 {
+        match parse_int(arg_get(1)) {
+            Ok(v) => {
+                if v > 0 {
+                    max = v
+                }
+            }
+            Err(_) => {}
+        }
+    }
+    let fd = http_bind(18100)
+    if fd < 0 {
+        print("bind failed")
+        return
+    }
+    print("http_server on :18100")
+    let mut n = 0
+    while n < max {
+        let c = http_accept(fd)
+        if c < 0 {
+            // skip
+        } else {
+            let p = http_path(c)
+            if str_eq(p, "/health") {
+                let _ = http_respond_ct(
+                    c,
+                    200,
+                    "application/json",
+                    "{\"ok\":true}\n"
+                )
+            } else {
+                if str_eq(p, "/") {
+                    let _ = http_respond(c, 200, "hello from mako\n")
+                } else {
+                    let _ = http_respond(c, 404, "missing\n")
+                }
+            }
+            // One-shot: free the slot even if the client asked for keep-alive.
+            let _ = http_close(c)
+            n = n + 1
+        }
+    }
+    let _ = http_close_listener(fd)
+    print("http_server done")
+}

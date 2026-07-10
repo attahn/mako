@@ -1,0 +1,12 @@
+fn classify(n: int) -> int {
+    match n {
+        0 => 100,
+        1 => 200,
+        _ => -1,
+    }
+}
+fn main() {
+    print_int(classify(0))
+    print_int(classify(1))
+    print_int(classify(9))
+}

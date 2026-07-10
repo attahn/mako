@@ -1,0 +1,8 @@
+# Offline advisory database seed for `mako pkg audit`.
+
+[[advisory]]
+id = "MAKO-DEMO-0001"
+name = "old-util"
+version = "<=0.9.9"
+severity = "medium"
+summary = "Demo advisory that should not match the locked util package."

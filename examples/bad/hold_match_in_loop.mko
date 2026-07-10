@@ -1,0 +1,17 @@
+// Must fail: match arm moves hold inside while → loop-carried use-after-move.
+fn use_moved(s: string) -> int {
+    len(s)
+}
+
+fn main() {
+    hold let x = "hi"
+    let mut i = 0
+    while i < 2 {
+        let n = match i {
+            0 => use_moved(x)
+            _ => len(x)
+        }
+        print_int(n)
+        i = i + 1
+    }
+}

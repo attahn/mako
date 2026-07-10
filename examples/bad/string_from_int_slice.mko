@@ -1,0 +1,5 @@
+// Must fail: cannot convert []int to string
+fn main() {
+    let a = [1, 2, 3]
+    print(string(a))
+}

@@ -1,0 +1,17 @@
+fn TestPbNested() {
+    let msg = pb_encode_nested("outer", 1, "inner", 99)
+    assert(str_eq(pb_simple_name(msg), "outer"))
+    assert_eq(pb_simple_id(msg), 1)
+    let inn = pb_nested_inner(msg)
+    assert(str_eq(pb_simple_name(inn), "inner"))
+    assert_eq(pb_simple_id(inn), 99)
+}
+
+fn TestPbRepeated() {
+    let msg = pb_encode_repeated_varint(10, 20, 30)
+    assert_eq(pb_repeated_count(msg, 4), 3)
+    assert_eq(pb_repeated_at(msg, 4, 0), 10)
+    assert_eq(pb_repeated_at(msg, 4, 1), 20)
+    assert_eq(pb_repeated_at(msg, 4, 2), 30)
+    assert_eq(pb_repeated_count(msg, 1), 0)
+}

@@ -1,0 +1,19 @@
+// JSON arrays: build, len, get, push (Partial).
+
+fn main() {
+    let nums = json_array_ints3(10, 20, 30)
+    print(nums)
+    print_int(json_array_len(nums))
+    print_int(json_array_get_int(nums, 0))
+    print_int(json_array_get_int(nums, 2))
+
+    let more = json_array_push_int(nums, 40)
+    print(more)
+    print_int(json_array_len(more))
+    print_int(json_array_get_int(more, 3))
+
+    let names = json_array_strings2("Ada", "Grace")
+    print(names)
+    print(json_array_get_string(names, 0))
+    print(json_array_get_string(names, 1))
+}

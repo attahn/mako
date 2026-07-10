@@ -1,0 +1,13 @@
+// WASI preview1 FS via wasmtime preopens (`--dir`).
+// Build: mako build examples/wasi_fs.mko --target wasm32-wasi -o out/wasi_fs.wasm
+// Prep:  mkdir -p out/wasi_fs_sandbox && echo seed > out/wasi_fs_sandbox/in.txt
+// Run:   wasmtime --dir=out/wasi_fs_sandbox::. out/wasi_fs.wasm
+// Guest paths are relative to the preopen (`.` → sandbox). Absolute `/…` needs `--dir=HOST::/`.
+fn main() {
+    let a = read_file("in.txt")
+    print(a)
+    let rc = write_file("out.txt", "wrote")
+    print_int(rc)
+    let b = read_file("out.txt")
+    print(b)
+}

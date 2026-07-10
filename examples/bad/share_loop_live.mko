@@ -1,0 +1,11 @@
+// Must fail: outer share still used in loop body — cannot mutate source mid-iteration.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    let mut i = 0
+    while i < 2 {
+        x = 2
+        print_int(share_get(s))
+        i = i + 1
+    }
+}

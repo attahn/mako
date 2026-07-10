@@ -1,0 +1,113 @@
+fn TestGrpcFraming() {
+    let pb = pb_encode_simple("mako", 7)
+    let framed = grpc_encode_message(pb)
+    assert_eq(grpc_message_len(framed), len(pb))
+    let payload = grpc_message_payload(framed)
+    assert(str_eq(pb_simple_name(payload), "mako"))
+    assert_eq(pb_simple_id(payload), 7)
+    assert_eq(len(framed), 5 + len(pb))
+}
+
+fn TestGrpcUnary() {
+    let req = grpc_unary_request("hello", 42)
+    assert(str_eq(grpc_unary_name(req), "hello"))
+    assert_eq(grpc_unary_id(req), 42)
+    assert_eq(grpc_message_len(req), len(pb_encode_simple("hello", 42)))
+}
+
+fn TestGrpcStatus() {
+    assert(str_eq(grpc_content_type(), "application/grpc"))
+    let t = grpc_status_trailer(0)
+    assert_eq(grpc_status_code(t), 0)
+    let t2 = grpc_status_trailer(14)
+    assert_eq(grpc_status_code(t2), 14)
+    assert_eq(grpc_status_code("nope"), -1)
+}
+
+fn TestGrpcHttp2Unary() {
+    let buf = grpc_http2_unary(1, "mako", 9)
+    assert_eq(http2_frame_type(buf), 1)
+    assert_eq(http2_frame_stream(buf), 1)
+    let data = http2_frame_at(buf, 1)
+    assert_eq(http2_frame_type(data), 0)
+    assert_eq(http2_frame_flags(data), 1)
+    let framed = grpc_http2_unary_payload(buf)
+    assert(str_eq(grpc_unary_name(framed), "mako"))
+    assert_eq(grpc_unary_id(framed), 9)
+}
+
+fn TestGrpcMaxMessage() {
+    assert_eq(grpc_default_max_message(), 4194304)
+    let ok = grpc_encode_message(pb_encode_simple("hi", 1))
+    assert_eq(grpc_message_within_limit(ok, 0), 1)
+    assert_eq(grpc_message_within_limit(ok, 4), 0)
+    assert_eq(grpc_message_within_limit(ok, grpc_message_len(ok)), 1)
+    assert_eq(grpc_message_within_limit("nope", 100), 0)
+}
+
+fn TestGrpcHttp2Response() {
+    let buf = grpc_http2_unary_response(1, "reply", 3)
+    assert_eq(http2_frame_type(buf), 1)
+    let data = http2_frame_at(buf, 1)
+    assert_eq(http2_frame_type(data), 0)
+    let trail = http2_frame_at(buf, 2)
+    assert_eq(http2_frame_type(trail), 1)
+    assert_eq(http2_frame_flags(trail), 5)
+    let framed = grpc_http2_response_payload(buf)
+    assert(str_eq(grpc_unary_name(framed), "reply"))
+    assert_eq(grpc_unary_id(framed), 3)
+    // HEADERS + DATA + trailer HEADERS → status after DATA
+    assert_eq(grpc_http2_response_status(buf), 0)
+    assert_eq(grpc_http2_response_status("nope"), -1)
+    // Non-zero status in trailers after DATA
+    let err = grpc_http2_unary_response_status(1, "fail", 1, 14)
+    assert_eq(grpc_http2_response_status(err), 14)
+    // Trailer-only (no DATA) must not count as response status
+    let alone = http2_headers_frame(1, hpack_encode_literal("grpc-status", "7"), 5)
+    assert_eq(grpc_http2_response_status(alone), -1)
+}
+
+fn TestGrpcHttp2Stream() {
+    // Single DATA without END_STREAM
+    let d0 = grpc_http2_stream_data(3, "a", 1, 0)
+    assert_eq(http2_frame_type(d0), 0)
+    assert_eq(http2_frame_stream(d0), 3)
+    assert_eq(http2_frame_flags(d0), 0)
+    assert_eq(grpc_http2_stream_data_count(d0, 3), -1)
+    // Single DATA with END_STREAM
+    let d1 = grpc_http2_stream_data(3, "b", 2, 1)
+    assert_eq(http2_frame_flags(d1), 1)
+    assert_eq(grpc_http2_stream_data_count(d1, 3), 1)
+    // Two-message client stream
+    let two = grpc_http2_stream_two(5, "first", 10, "second", 20)
+    assert_eq(grpc_http2_stream_data_count(two, 5), 2)
+    let f0 = http2_frame_at(two, 0)
+    let f1 = http2_frame_at(two, 1)
+    assert_eq(http2_frame_flags(f0), 0)
+    assert_eq(http2_frame_flags(f1), 1)
+    let p0 = http2_frame_payload(f0)
+    let p1 = http2_frame_payload(f1)
+    assert(str_eq(grpc_unary_name(p0), "first"))
+    assert(str_eq(grpc_unary_name(p1), "second"))
+    assert_eq(grpc_unary_id(p0), 10)
+    assert_eq(grpc_unary_id(p1), 20)
+}
+
+fn TestGrpcHttp2ClientStreamFlow() {
+    // One flow: two client DATA (± END_STREAM) + server response with status.
+    let flow = grpc_http2_client_stream_flow(7, "a", 1, "b", 2, "ok", 9, 0)
+    assert_eq(http2_frame_type(flow), 0)
+    assert_eq(http2_frame_flags(flow), 0)
+    // frame_at returns suffix from index — flags of second DATA
+    assert_eq(http2_frame_flags(http2_frame_at(flow, 1)), 1)
+    // Client stream alone ends with END_STREAM
+    let req = grpc_http2_stream_two(7, "a", 1, "b", 2)
+    assert_eq(grpc_http2_stream_data_count(req, 7), 2)
+    // Suffix from frame 2 = server HEADERS+DATA+trailer
+    let resp = http2_frame_at(flow, 2)
+    assert_eq(grpc_http2_response_status(resp), 0)
+    assert(str_eq(grpc_unary_name(grpc_http2_response_payload(resp)), "ok"))
+    let err = grpc_http2_client_stream_flow(9, "x", 1, "y", 2, "no", 1, 14)
+    assert_eq(grpc_http2_response_status(http2_frame_at(err, 2)), 14)
+}
+

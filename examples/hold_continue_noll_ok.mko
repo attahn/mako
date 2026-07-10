@@ -1,0 +1,13 @@
+// `continue` without a move — hold remains usable after the loop.
+fn main() {
+    hold let s = "hi"
+    let mut i = 0
+    while i < 2 {
+        i = i + 1
+        if i == 1 {
+            continue
+        }
+        break
+    }
+    print(s)
+}

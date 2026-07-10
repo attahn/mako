@@ -1,0 +1,4 @@
+fn main() {
+    let ch = chan_new(2)
+    let _ = ch.send("nope")
+}

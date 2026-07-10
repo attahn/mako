@@ -1,0 +1,16 @@
+// Must fail: reuse moved nested non-Copy field
+struct Inner {
+    a: string
+    b: int
+}
+
+struct Outer {
+    inner: Inner
+    n: int
+}
+
+fn main() {
+    hold let p = Outer { inner: Inner { a: "x", b: 2 }, n: 9 }
+    let a = p.inner.a
+    print(p.inner.a)
+}

@@ -1,0 +1,14 @@
+enum Color {
+    Red
+    Blue
+}
+
+fn f(c: Color) -> int {
+    match c {
+        Red => 1,
+    }
+}
+
+fn main() {
+    print_int(f(Red))
+}

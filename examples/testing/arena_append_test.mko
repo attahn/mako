@@ -1,0 +1,16 @@
+struct Point {
+    x: int
+    y: int
+}
+
+fn TestArenaAppend() {
+    arena a {
+        let mut xs = make([]Point, 0, 1)
+        xs = append(xs, Point { x: 1, y: 2 })
+        xs = append(xs, Point { x: 3, y: 4 })
+        xs = append(xs, Point { x: 5, y: 6 })
+        assert_eq(len(xs), 3)
+        assert_eq(xs[2].x, 5)
+        assert_eq(xs[1].y, 4)
+    }
+}

@@ -1,0 +1,165 @@
+// Select N>8 (10 arms) + round-robin fairness when many are ready.
+
+fn main() {
+    let c0 = chan_new(2)
+    let c1 = chan_new(2)
+    let c2 = chan_new(2)
+    let c3 = chan_new(2)
+    let c4 = chan_new(2)
+    let c5 = chan_new(2)
+    let c6 = chan_new(2)
+    let c7 = chan_new(2)
+    let c8 = chan_new(2)
+    let c9 = chan_new(2)
+
+    let _ = c0.send(100)
+    let _ = c1.send(101)
+    let _ = c2.send(102)
+    let _ = c3.send(103)
+    let _ = c4.send(104)
+    let _ = c5.send(105)
+    let _ = c6.send(106)
+    let _ = c7.send(107)
+    let _ = c8.send(108)
+    let _ = c9.send(109)
+
+    select timeout 200 {
+        c0 => {
+            print_int(0)
+            print_int(chan_select_value())
+        }
+        c1 => {
+            print_int(1)
+            print_int(chan_select_value())
+        }
+        c2 => {
+            print_int(2)
+            print_int(chan_select_value())
+        }
+        c3 => {
+            print_int(3)
+            print_int(chan_select_value())
+        }
+        c4 => {
+            print_int(4)
+            print_int(chan_select_value())
+        }
+        c5 => {
+            print_int(5)
+            print_int(chan_select_value())
+        }
+        c6 => {
+            print_int(6)
+            print_int(chan_select_value())
+        }
+        c7 => {
+            print_int(7)
+            print_int(chan_select_value())
+        }
+        c8 => {
+            print_int(8)
+            print_int(chan_select_value())
+        }
+        c9 => {
+            print_int(9)
+            print_int(chan_select_value())
+        }
+        default => {
+            print("unexpected default")
+        }
+    }
+
+    select timeout 200 {
+        c0 => {
+            print_int(0)
+            print_int(chan_select_value())
+        }
+        c1 => {
+            print_int(1)
+            print_int(chan_select_value())
+        }
+        c2 => {
+            print_int(2)
+            print_int(chan_select_value())
+        }
+        c3 => {
+            print_int(3)
+            print_int(chan_select_value())
+        }
+        c4 => {
+            print_int(4)
+            print_int(chan_select_value())
+        }
+        c5 => {
+            print_int(5)
+            print_int(chan_select_value())
+        }
+        c6 => {
+            print_int(6)
+            print_int(chan_select_value())
+        }
+        c7 => {
+            print_int(7)
+            print_int(chan_select_value())
+        }
+        c8 => {
+            print_int(8)
+            print_int(chan_select_value())
+        }
+        c9 => {
+            print_int(9)
+            print_int(chan_select_value())
+        }
+        default => {
+            print("unexpected default")
+        }
+    }
+
+    select timeout 200 {
+        c0 => {
+            print_int(0)
+            print_int(chan_select_value())
+        }
+        c1 => {
+            print_int(1)
+            print_int(chan_select_value())
+        }
+        c2 => {
+            print_int(2)
+            print_int(chan_select_value())
+        }
+        c3 => {
+            print_int(3)
+            print_int(chan_select_value())
+        }
+        c4 => {
+            print_int(4)
+            print_int(chan_select_value())
+        }
+        c5 => {
+            print_int(5)
+            print_int(chan_select_value())
+        }
+        c6 => {
+            print_int(6)
+            print_int(chan_select_value())
+        }
+        c7 => {
+            print_int(7)
+            print_int(chan_select_value())
+        }
+        c8 => {
+            print_int(8)
+            print_int(chan_select_value())
+        }
+        c9 => {
+            print_int(9)
+            print_int(chan_select_value())
+        }
+        default => {
+            print("unexpected default")
+        }
+    }
+
+    print("select10 fair ok")
+}

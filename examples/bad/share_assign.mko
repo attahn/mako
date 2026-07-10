@@ -1,0 +1,4 @@
+fn main() {
+    share let s = share_int(1)
+    s = share_int(2)
+}

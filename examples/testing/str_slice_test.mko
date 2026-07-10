@@ -1,0 +1,28 @@
+fn TestStrSliceMake() {
+    let mut s = make([]string, 2, 4)
+    assert_eq(len(s), 2)
+    assert_eq(cap(s), 4)
+    s[0] = "x"
+    s[1] = "y"
+    assert_eq_str(s[0], "x")
+    assert_eq_str(s[1], "y")
+    s = append(s, "z")
+    assert_eq(len(s), 3)
+    assert_eq_str(s[2], "z")
+}
+
+fn TestStrSliceLitRange() {
+    let mut xs: []string = ["a", "b", "c"]
+    assert_eq(len(xs), 3)
+    let mut n = 0
+    for _, v in range xs {
+        n = n + 1
+        if n == 1 {
+            assert_eq_str(v, "a")
+        }
+    }
+    assert_eq(n, 3)
+    let t = xs[1:3]
+    assert_eq(len(t), 2)
+    assert_eq_str(t[0], "b")
+}

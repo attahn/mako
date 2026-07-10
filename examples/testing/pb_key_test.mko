@@ -1,0 +1,11 @@
+fn TestPbKey() {
+    // field 1, wire 0 (varint) → key = 8
+    let k = pb_encode_key(1, 0)
+    assert_eq(pb_decode_varint(k), 8)
+    assert_eq(pb_key_field(k), 1)
+    assert_eq(pb_key_wire(k), 0)
+    // field 2, wire 2 (length-delimited) → key = 18
+    let k2 = pb_encode_key(2, 2)
+    assert_eq(pb_key_field(k2), 2)
+    assert_eq(pb_key_wire(k2), 2)
+}

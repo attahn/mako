@@ -1,0 +1,67 @@
+// Go-like range + while + break/continue
+
+fn main() {
+    let s = [10, 20, 30]
+
+    // index + value
+    for i, v in range s {
+        print_int(i)
+        print_int(v)
+    }
+
+    // index only
+    for i in range s {
+        print_int(i)
+    }
+
+    // value only (blank _)
+    for _, v in range s {
+        print_int(v)
+    }
+
+    // no binders
+    let mut n = 0
+    for range s {
+        n = n + 1
+    }
+    print_int(n)
+
+    // integer range (0..n-1)
+    for i in range 3 {
+        print_int(i)
+    }
+
+    // bytes
+    let b: []byte = [65, 66]
+    for i, v in range b {
+        print_int(i)
+        print_int(int(v))
+    }
+
+    // string → runes (index = byte offset)
+    for i, r in range "ab" {
+        print_int(i)
+        print_int(r)
+    }
+
+    // legacy forms still work
+    for v in s {
+        print_int(v)
+    }
+    for i in 2 {
+        print_int(i)
+    }
+
+    // while + break / continue
+    let mut w = 0
+    while w < 5 {
+        w = w + 1
+        if w == 2 {
+            continue
+        }
+        if w == 4 {
+            break
+        }
+        print_int(w)
+    }
+}

@@ -1,0 +1,24 @@
+// Fat-pointer interface value: store as iface type, call method via vtable
+
+struct Counter {
+    n: int
+}
+
+interface Adder {
+    fn add(int) -> int
+}
+
+fn Adder_add(self: Counter, delta: int) -> int {
+    return self.n + delta
+}
+
+fn use_adder(a: Adder, d: int) -> int {
+    return a.add(d)
+}
+
+fn main() {
+    let c = Counter { n: 10 }
+    let a: Adder = c
+    print_int(a.add(5))
+    print_int(use_adder(c, 7))
+}

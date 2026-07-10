@@ -1,0 +1,33 @@
+fn TestBearerAndBasicAuth() {
+    assert_eq_str(auth_bearer("Bearer token-123"), "token-123")
+    assert_eq_str(auth_bearer("Basic nope"), "")
+    assert_eq(auth_check_bearer("Bearer token-123", "token-123"), 1)
+    assert_eq(auth_check_bearer("Bearer token-123", "other"), 0)
+
+    let basic = auth_basic_header("alice", "secret")
+    assert(str_contains(basic, "Basic "))
+    assert_eq(auth_check_basic(basic, "alice", "secret"), 1)
+    assert_eq(auth_check_basic(basic, "alice", "wrong"), 0)
+}
+
+fn TestRolesAndSessionCookie() {
+    assert_eq(auth_role_has("admin,editor", "admin"), 1)
+    assert_eq(auth_role_has("admin, editor", "editor"), 1)
+    assert_eq(auth_role_has("admin,editor", "viewer"), 0)
+    assert_eq(authz_allow_role("viewer,editor", "admin, editor"), 1)
+    assert_eq(authz_allow_role("viewer", "admin,editor"), 0)
+    assert_eq(authz_allow_role("viewer", ""), 1)
+
+    let cookies = "sid=abc123; theme=dark"
+    assert_eq(auth_session_cookie(cookies, "sid", "abc123"), 1)
+    assert_eq(auth_session_cookie(cookies, "sid", "wrong"), 0)
+}
+
+fn TestSignedAuthToken() {
+    let tok = auth_token_sign("user:42", "secret-key")
+    assert(str_contains(tok, "user:42."))
+    assert_eq_str(auth_token_subject(tok), "user:42")
+    assert_eq(auth_token_check(tok, "secret-key"), 1)
+    assert_eq(auth_token_check(tok, "wrong-key"), 0)
+    assert_eq(auth_token_check("missing-dot", "secret-key"), 0)
+}

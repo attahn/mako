@@ -1,0 +1,42 @@
+// Darwin kqueue seed (io_kq_poll2) — colorless; falls back to select on non-BSD.
+
+fn connect_b() -> int {
+    sleep_ms(30)
+    let c = tcp_connect("127.0.0.1", 18122)
+    let _ = tcp_close(c)
+    return 0
+}
+
+fn main() {
+    let a = tcp_listen(18121)
+    let b = tcp_listen(18122)
+    if a < 0 {
+        print("listen failed")
+        return
+    }
+    if b < 0 {
+        print("listen failed")
+        return
+    }
+
+    let idle = io_kq_poll2(a, b, 40)
+    print_int(idle)
+
+    crew t {
+        let _ = t.kick(connect_b())
+        let which = io_kq_poll2(a, b, 500)
+        print_int(which)
+        if which == 1 {
+            let client = tcp_accept_nb(b)
+            let _ = tcp_close(client)
+            print("kq ready b")
+        }
+        if which < 0 {
+            print("kq timeout")
+        }
+    }
+
+    let _ = tcp_close(a)
+    let _ = tcp_close(b)
+    print("io_kq done")
+}

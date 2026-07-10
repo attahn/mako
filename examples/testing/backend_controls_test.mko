@@ -1,0 +1,36 @@
+fn TestRateLimiterAllowsThenBlocks() {
+    let key = "roadmap-rate-key"
+    assert_eq(rate_allow(key, 2, 60000), 1)
+    assert_eq(rate_remaining(key, 2, 60000), 1)
+    assert_eq(rate_allow(key, 2, 60000), 1)
+    assert_eq(rate_remaining(key, 2, 60000), 0)
+    assert_eq(rate_allow(key, 2, 60000), 0)
+    assert_eq(rate_allow("roadmap-rate-other", 2, 60000), 1)
+}
+
+fn TestCachePutGetOverwriteAndExpire() {
+    assert_eq(cache_put("roadmap-cache-key", "v1", 60000), 1)
+    assert_eq(cache_has("roadmap-cache-key"), 1)
+    assert_eq_str(cache_get("roadmap-cache-key"), "v1")
+
+    assert_eq(cache_put("roadmap-cache-key", "v2", 60000), 1)
+    assert_eq_str(cache_get("roadmap-cache-key"), "v2")
+
+    assert_eq(cache_put("roadmap-cache-expire", "gone", 1), 1)
+    sleep_ms(3)
+    assert_eq(cache_has("roadmap-cache-expire"), 0)
+    assert_eq_str(cache_get("roadmap-cache-expire"), "")
+}
+
+fn TestHttpCompressionNegotiation() {
+    let identity = http_compress_if_accepted("plain body", "br")
+    assert_eq_str(identity, "plain body")
+    assert_eq_str(http_content_encoding("br"), "identity")
+
+    if gzip_available() == 1 {
+        assert_eq_str(http_content_encoding("gzip, deflate"), "gzip")
+        let compressed = http_compress_if_accepted("plain body plain body plain body", "gzip")
+        assert(str_len(compressed) > 0)
+        assert_eq_str(gzip_decompress(compressed), "plain body plain body plain body")
+    }
+}

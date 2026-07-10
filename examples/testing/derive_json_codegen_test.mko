@@ -1,0 +1,22 @@
+#[derive(json)]
+struct Account {
+    id: int
+    name: string
+    email: string
+    age: int
+}
+
+fn TestDeriveJsonGeneratesAllScalarFields() {
+    let doc = Account_to_json(42, "Ada", "ada@example.test", 36)
+    assert_eq(json_get_int(doc, "id"), 42)
+    assert_eq_str(json_get_string(doc, "name"), "Ada")
+    assert_eq_str(json_get_string(doc, "email"), "ada@example.test")
+    assert_eq(json_get_int(doc, "age"), 36)
+    assert_eq(Account_id_from_json(doc), 42)
+    assert_eq_str(Account_name_from_json(doc), "Ada")
+    assert_eq_str(Account_email_from_json(doc), "ada@example.test")
+    assert_eq(Account_age_from_json(doc), 36)
+    let schema = reflect_type_schema("Account")
+    assert_eq(reflect_struct_num_fields(schema), 4)
+    assert_eq_str(reflect_struct_field_name(schema, 2), "email")
+}

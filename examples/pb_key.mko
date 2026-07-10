@@ -1,0 +1,5 @@
+fn main() {
+    let k = pb_encode_key(1, 0)
+    print_int(pb_key_field(k))
+    print_int(pb_key_wire(k))
+}

@@ -1,0 +1,26 @@
+// Go-like error wrapping: error / errorf / wrap_err / error_is / ?
+fn open_cfg(path: string) -> Result[int, string] {
+    if str_eq(path, "") {
+        return error("empty path")
+    }
+    if str_contains(path, "..") {
+        return errorf("invalid path %s", path)
+    }
+    Ok(1)
+}
+
+fn load() -> Result[int, string] {
+    let fd = open_cfg("bad..x")?
+    Ok(fd)
+}
+
+fn main() {
+    let r = load()
+    // wrap adds context like fmt.Errorf("load: %w", err)
+    let w = wrap_err(r, "load")
+    assert(error_is(w, "invalid path"))
+    assert(error_is(w, "load"))
+    let msg = error_string(w)
+    assert(str_contains(msg, "load"))
+    print("ok")
+}

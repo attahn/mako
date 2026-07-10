@@ -1,0 +1,17 @@
+struct Inner {
+    a: int
+    b: int
+}
+
+struct Outer {
+    inner: Inner
+    n: int
+}
+
+fn TestHoldNestedPartial() {
+    hold let p = Outer { inner: Inner { a: 1, b: 2 }, n: 9 }
+    let a = p.inner.a
+    assert_eq(a, 1)
+    assert_eq(p.inner.b, 2)
+    assert_eq(p.n, 9)
+}

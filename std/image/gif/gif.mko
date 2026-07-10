@@ -1,0 +1,6 @@
+fn encode_rgb(w: int, h: int, pixels: string) -> string { return gif_encode_rgb(w, h, pixels) }
+fn decode_rgb(gif: string) -> string { return gif_decode_rgb(gif) }
+fn encode_rgb_lzw(w: int, h: int, pixels: string) -> string { return gif_encode_rgb_lzw(w, h, pixels) }
+fn decode_rgb_lzw(gif: string) -> string { return gif_decode_rgb_lzw(gif) }
+fn width(gif: string) -> int { return gif_width(gif) }
+fn height(gif: string) -> int { return gif_height(gif) }

@@ -1,0 +1,21 @@
+// Enum associated methods: Shape_area(self) → s.area()
+
+enum Shape {
+    Circle(int),
+    Rect(int, int),
+    Point,
+}
+
+fn Shape_area(self: Shape) -> int {
+    match self {
+        Circle(r) => r * r,
+        Rect(w, h) => w * h,
+        Point => 0,
+    }
+}
+
+fn main() {
+    print_int(Circle(5).area())
+    print_int(Rect(3, 4).area())
+    print_int(Point.area())
+}

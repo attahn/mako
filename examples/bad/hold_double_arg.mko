@@ -1,0 +1,5 @@
+fn join2(a: string, b: string) -> string { return a + b }
+fn main() {
+    hold let x = "hi"
+    print(join2(x, x))
+}

@@ -1,0 +1,16 @@
+fn TestValidateRequiredAndLength() {
+    assert_eq(validate_required("Ada"), 1)
+    assert_eq(validate_required("   "), 0)
+    assert_eq(validate_min_len("abcd", 3), 1)
+    assert_eq(validate_min_len("ab", 3), 0)
+    assert_eq(validate_max_len("ab", 3), 1)
+    assert_eq(validate_max_len("abcd", 3), 0)
+}
+
+fn TestValidateRangeAndEmail() {
+    assert_eq(validate_int_range(5, 1, 10), 1)
+    assert_eq(validate_int_range(0, 1, 10), 0)
+    assert_eq(validate_email("ada@example.com"), 1)
+    assert_eq(validate_email("ada.example.com"), 0)
+    assert_eq(validate_email("ada@"), 0)
+}

@@ -1,0 +1,6 @@
+// Must fail: copy between []int and []int64
+fn main() {
+    let mut dst: []int = [0, 0]
+    let src: []int64 = [1, 2]
+    let _ = copy(dst, src)
+}

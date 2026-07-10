@@ -1,0 +1,9 @@
+// Mid-scope NLL: after last use of share `s`, mutate source without share_drop.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    print_int(share_get(s))
+    // last use of s above — borrow ends; mutation OK
+    x = 2
+    print_int(x)
+}

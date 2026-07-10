@@ -1,0 +1,18 @@
+// Crew cancel — stop scheduling new work after cancel
+fn work(n: int) -> int {
+    return n * n
+}
+
+fn main() {
+    crew t {
+        let a = t.kick(work(3))
+        print_int(a.join())
+        t.cancel()
+        // After cancel, new kicks do not start threads
+        let b = t.kick(work(9))
+        print_int(b.join())
+        if t.cancelled() {
+            print("crew cancelled")
+        }
+    }
+}

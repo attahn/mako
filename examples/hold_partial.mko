@@ -1,0 +1,13 @@
+// Partial field moves from hold structs
+
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    hold let p = Point { x: 1, y: 2 }
+    let x = p.x
+    print_int(x)
+    print_int(p.y)
+}

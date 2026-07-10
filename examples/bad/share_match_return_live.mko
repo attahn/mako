@@ -1,0 +1,15 @@
+// Must fail: share still live on the reachable arm path after match.
+// Diverging arm (`return`) must not clear the borrow for code after match.
+fn main() -> int {
+    let mut x = 1
+    share let s = share_int(x)
+    let n = match 1 {
+        0 => {
+            return 0
+        }
+        _ => 1
+    }
+    x = 2
+    print_int(share_get(s))
+    return n
+}

@@ -1,0 +1,10 @@
+// Must fail: non-Copy hold moves into a call; second use is illegal.
+fn id(s: string) -> string {
+    return s
+}
+
+fn main() {
+    hold let x = "hi"
+    print(id(x))
+    print(x)
+}

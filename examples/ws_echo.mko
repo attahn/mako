@@ -1,0 +1,5 @@
+// WebSocket text-frame echo (RFC6455 Partial) — one client then exit
+
+fn main() {
+    print_int(ws_echo_once(18092))
+}

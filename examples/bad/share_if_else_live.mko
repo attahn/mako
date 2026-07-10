@@ -1,0 +1,10 @@
+// Must fail: neither arm ends the share — borrow still live after join.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    if 0 == 1 {
+    } else {
+    }
+    x = 2
+    print_int(share_get(s))
+}

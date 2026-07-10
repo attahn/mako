@@ -1,0 +1,27 @@
+// Go-like int vs int64 — distinct types; convert with int64(x) / int(x).
+// On this C backend both lower to int64_t (like Go on amd64), but the checker
+// still requires explicit conversion between named values.
+
+fn add64(a: int64, b: int64) -> int64 {
+    return a + b
+}
+
+fn main() {
+    let a: int = 10
+    let b: int64 = 20
+    print_int(a)
+    print_int64(b)
+
+    // Literals may inhabit either annotation:
+    let c: int64 = 42
+    print_int64(c)
+
+    // Explicit conversion (Go-style call form):
+    let d = int64(a)
+    print_int64(add64(d, b))
+    print_int(int(b))
+
+    // Same-kind arithmetic OK:
+    print_int(a + 1)
+    print_int64(b + int64(1))
+}

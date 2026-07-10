@@ -1,0 +1,1 @@
+fn escape(s: string) -> string { return html_escape(s) }

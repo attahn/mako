@@ -1,0 +1,5 @@
+fn now() -> int { return now_ms() }
+fn now_ns() -> int { return now_ns() }
+fn unix() -> int { return time_unix() }
+fn sleep(ms: int) { sleep_ms(ms) }
+fn format(ms: int) -> string { return time_format(ms) }

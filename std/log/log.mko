@@ -1,0 +1,5 @@
+fn info(msg: string) { log_info(msg) }
+fn warn(msg: string) { log_warn(msg) }
+fn error(msg: string) { log_error(msg) }
+fn debug(msg: string) { log_debug(msg) }
+fn kv(level: string, key: string, val: string) { log_kv(level, key, val) }

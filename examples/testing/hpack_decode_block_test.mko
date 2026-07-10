@@ -1,0 +1,26 @@
+fn TestHpackDecodeBlock() {
+    let lit = hpack_encode_literal("x-mako", "ok")
+    let idx = hpack_encode_indexed(2)
+    let block = idx + lit
+    assert_eq(hpack_decode_block(block), 2)
+    assert_eq(hpack_decoded_count(), 2)
+    assert(str_eq(hpack_decoded_name(0), ":method"))
+    assert(str_eq(hpack_decoded_value(0), "GET"))
+    assert(str_eq(hpack_decoded_name(1), "x-mako"))
+    assert(str_eq(hpack_decoded_value(1), "ok"))
+    let _ = hpack_decode_clear()
+    assert_eq(hpack_decoded_count(), 0)
+}
+
+fn TestHpackDecodeMergedFrames() {
+    let h = http2_headers_frame(1, hpack_encode_indexed(2), 0)
+    let c = http2_continuation_frame(1, hpack_encode_literal("x-a", "b"), 4)
+    let buf = http2_concat_frames(h, c)
+    let block = http2_header_block(buf, 1)
+    assert_eq(hpack_decode_block(block), 2)
+    assert(str_eq(hpack_decoded_name(0), ":method"))
+    assert(str_eq(hpack_decoded_value(0), "GET"))
+    assert(str_eq(hpack_decoded_name(1), "x-a"))
+    assert(str_eq(hpack_decoded_value(1), "b"))
+    let _ = hpack_decode_clear()
+}

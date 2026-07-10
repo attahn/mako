@@ -1,0 +1,31 @@
+fn TestHttpGracefulShutdownState() {
+    assert_eq(http_shutdown_reset(), 1)
+    assert_eq(http_shutdown_requested(), 0)
+    assert_eq(http_shutdown_ready(), 1)
+    assert_eq(http_shutdown_remaining(), -1)
+    assert_eq(http_shutdown_expired(), 0)
+    assert_eq(http_active_connections(), 0)
+    assert_eq(http_shutdown_drain_conn(-1), 0)
+
+    let before = now_ms()
+    let deadline = http_shutdown_begin(25)
+    assert(deadline >= before)
+    assert_eq(http_shutdown_requested(), 1)
+    assert_eq(http_shutdown_ready(), 0)
+    assert(http_shutdown_deadline() >= deadline)
+    assert(http_shutdown_remaining() >= 0)
+    assert_eq(http_shutdown_expired(), 0)
+
+    sleep_ms(35)
+    assert_eq(http_shutdown_expired(), 1)
+    assert_eq(http_shutdown_remaining(), 0)
+
+    assert_eq(http_shutdown_reset(), 1)
+    assert_eq(http_shutdown_requested(), 0)
+    assert_eq(http_shutdown_ready(), 1)
+
+    let immediate = http_shutdown_begin(0)
+    assert(immediate <= now_ms())
+    assert_eq(http_shutdown_expired(), 1)
+    assert_eq(http_shutdown_reset(), 1)
+}

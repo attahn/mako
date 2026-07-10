@@ -1,0 +1,19 @@
+enum Shape {
+    Circle(int),
+    Rect(int, int),
+    Point,
+}
+
+fn Shape_area(self: Shape) -> int {
+    match self {
+        Circle(r) => r * r,
+        Rect(w, h) => w * h,
+        Point => 0,
+    }
+}
+
+fn TestEnumMethod() {
+    assert_eq(Circle(5).area(), 25)
+    assert_eq(Rect(3, 4).area(), 12)
+    assert_eq(Point.area(), 0)
+}

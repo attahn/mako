@@ -1,0 +1,5 @@
+// Must fail at check time: byte literal out of range
+fn main() {
+    let x = byte(300)
+    print_int(int(x))
+}

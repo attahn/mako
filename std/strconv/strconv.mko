@@ -1,0 +1,4 @@
+fn atoi(s: string) -> Result[int, string] { return parse_int(s) }
+fn atof(s: string) -> float { return parse_float(s) }
+fn atob(s: string) -> Result[int, string] { return parse_bool(s) }
+fn itoa(n: int) -> string { return format_int(n) }

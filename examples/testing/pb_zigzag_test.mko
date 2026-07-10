@@ -1,0 +1,12 @@
+fn TestPbZigzag() {
+    assert_eq(pb_zigzag_encode(0), 0)
+    assert_eq(pb_zigzag_encode(-1), 1)
+    assert_eq(pb_zigzag_encode(1), 2)
+    assert_eq(pb_zigzag_encode(-2), 3)
+    assert_eq(pb_zigzag_decode(1), -1)
+    assert_eq(pb_zigzag_decode(2), 1)
+    let e = pb_encode_sint(-1)
+    assert_eq(pb_decode_sint(e), -1)
+    let e2 = pb_encode_sint(150)
+    assert_eq(pb_decode_sint(e2), 150)
+}

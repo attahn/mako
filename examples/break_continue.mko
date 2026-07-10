@@ -1,0 +1,25 @@
+// break / continue in while and for
+
+fn main() {
+    let mut i = 0
+    while i < 10 {
+        i = i + 1
+        if i < 3 {
+            continue
+        }
+        if i > 5 {
+            break
+        }
+        print_int(i)
+    }
+
+    for j in range 8 {
+        if j == 1 {
+            continue
+        }
+        if j == 4 {
+            break
+        }
+        print_int(j)
+    }
+}

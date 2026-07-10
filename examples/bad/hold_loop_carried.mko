@@ -1,0 +1,10 @@
+// Must fail: loop-carried move — second iteration would use moved hold.
+fn main() {
+    hold let x = "hi"
+    let mut i = 0
+    while i < 2 {
+        let y = x
+        print(y)
+        i = i + 1
+    }
+}

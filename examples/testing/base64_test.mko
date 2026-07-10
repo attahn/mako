@@ -1,0 +1,5 @@
+fn TestBase64() {
+    let e = base64_encode("hi")
+    assert_eq_str(e, "aGk=")
+    assert_eq_str(base64_decode(e), "hi")
+}

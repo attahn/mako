@@ -1,0 +1,10 @@
+fn encode_gray(w: int, h: int, pixels: string) -> string { return jpeg_encode_gray(w, h, pixels) }
+fn decode_gray(jpeg: string) -> string { return jpeg_decode_gray(jpeg) }
+fn encode_gray_dct(w: int, h: int, pixels: string) -> string { return jpeg_encode_gray_dct(w, h, pixels) }
+fn encode_gray_huff(w: int, h: int, pixels: string) -> string { return jpeg_encode_gray_huff(w, h, pixels) }
+fn encode_gray_jfif(w: int, h: int, pixels: string) -> string { return jpeg_encode_gray_jfif(w, h, pixels) }
+fn is_jfif(jpeg: string) -> int { return jpeg_is_jfif(jpeg) }
+fn huff_block(jpeg: string) -> string { return jpeg_huff_block(jpeg) }
+fn dct_dc(jpeg: string) -> int { return jpeg_dct_dc(jpeg) }
+fn width(jpeg: string) -> int { return jpeg_width(jpeg) }
+fn height(jpeg: string) -> int { return jpeg_height(jpeg) }

@@ -1,0 +1,12 @@
+import "./lib.mko"
+
+fn main() {
+    kv_reset()
+    let _ = kv_put("a", "1")
+    let _ = kv_put("b", "2")
+    let _ = kv_put("a", "3")
+    let _ = kv_del("b")
+    let m = kv_load()
+    print(kv_get(m, "a"))
+    print(kv_get(m, "b"))
+}

@@ -1,0 +1,43 @@
+struct Point {
+    x: int
+    y: int
+}
+
+fn TestRegexpBackrefAndClasses() {
+    assert(regex_match("(a)\\1", "aa"))
+    assert(not regex_match("(a)\\1", "ab"))
+    assert(regex_match("\\p{L}+", "Hi"))
+    assert(regex_match("[[:lower:]]+", "abc"))
+    assert(regex_match("[[:upper:]]+", "ABC"))
+}
+
+fn TestJpegJfif() {
+    let gray = "ABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGHABCDEFGH"
+    let j = jpeg_encode_gray_jfif(8, 8, gray)
+    assert_eq(jpeg_is_jfif(j), 1)
+    assert_eq_str(jpeg_decode_gray(j), gray)
+    assert_eq(jpeg_width(j), 8)
+    assert_eq(jpeg_height(j), 8)
+}
+
+fn TestReflectTypeSchema() {
+    assert(reflect_type_count() >= 1)
+    let sch = reflect_type_schema("Point")
+    assert(str_contains(sch, "x:int"))
+    assert(str_contains(sch, "y:int"))
+    let rv = reflect_value_of_type("Point")
+    assert_eq(reflect_value_num_fields(rv), 2)
+    assert_eq(reflect_value_set(rv, "x", "3"), 0)
+    assert_eq_str(reflect_value_get(rv, "x"), "3")
+}
+
+fn TestSmtpStarttlsAndStrPolish() {
+    // closed port → connect fail (-1)
+    assert_eq(smtp_send_starttls("127.0.0.1", 1, "u", "p", "a@b.com", "c@d.com", "x"), -1)
+    let _ = smtp_starttls_available()
+    let parts = str_cut("a=b=c", "=")
+    assert_eq(len(parts), 2)
+    assert_eq_str(parts[0], "a")
+    assert_eq_str(parts[1], "b=c")
+    assert_eq(str_count("ababab", "ab"), 3)
+}

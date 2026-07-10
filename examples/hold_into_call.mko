@@ -1,0 +1,9 @@
+// Valid: single consuming use of hold into a call (last use).
+fn id(n: int) -> int {
+    return n
+}
+
+fn main() {
+    hold let x = 42
+    print_int(id(x))
+}

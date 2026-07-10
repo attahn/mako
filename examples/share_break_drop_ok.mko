@@ -1,0 +1,11 @@
+// Share dropped then `break` — mut after loop OK (borrow ended on exit path).
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    while true {
+        share_drop(s)
+        break
+    }
+    x = 2
+    print_int(x)
+}

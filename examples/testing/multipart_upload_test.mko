@@ -1,0 +1,17 @@
+fn TestMultipartUploadMetadataAndLimits() {
+    let ct = "multipart/form-data; boundary=----MakoUpload"
+    let boundary = multipart_boundary(ct)
+    assert_eq_str(boundary, "----MakoUpload")
+
+    let body = "------MakoUpload\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\navatar\r\n------MakoUpload\r\nContent-Disposition: form-data; name=\"file\"; filename=\"avatar.txt\"\r\nContent-Type: text/plain\r\n\r\nhello upload\r\n------MakoUpload--\r\n"
+
+    assert_eq_str(multipart_form_value(body, boundary, "title"), "avatar")
+    assert_eq_str(multipart_file_name(body, boundary, "file"), "avatar.txt")
+    assert_eq_str(multipart_file_content_type(body, boundary, "file"), "text/plain")
+    assert_eq_str(multipart_file_value(body, boundary, "file"), "hello upload")
+    assert_eq(multipart_file_size(body, boundary, "file"), 12)
+    assert_eq(multipart_file_allowed(body, boundary, "file", 12, "image/png, text/plain"), 1)
+    assert_eq(multipart_file_allowed(body, boundary, "file", 11, "image/png, text/plain"), 0)
+    assert_eq(multipart_file_allowed(body, boundary, "file", 12, "application/json"), 0)
+    assert_eq(multipart_file_size(body, boundary, "missing"), -1)
+}

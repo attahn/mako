@@ -1,0 +1,27 @@
+// []int64 slices + Go-like copy + int32.
+
+fn main() {
+    let mut a: []int64 = [10, 20, 30]
+    print_int(len(a))
+    print_int64(a[1])
+    a = append(a, 40)
+    print_int(len(a))
+    print_int64(a[3])
+
+    let t = a[1:3]
+    print_int(len(t))
+    print_int64(t[0])
+
+    // copy(dst, src) — like Go; returns count copied
+    let mut dst: []int64 = [0, 0, 0, 0]
+    let n = copy(dst, a)
+    print_int(n)
+    print_int64(dst[0])
+    print_int64(dst[3])
+
+    // int32 family
+    let x: int32 = 7
+    let y: int32 = int32(100)
+    print_int32(x + y)
+    print_int64(int64(x))
+}

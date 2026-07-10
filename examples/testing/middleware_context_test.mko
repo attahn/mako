@@ -1,0 +1,41 @@
+fn TestRequestContextSetGetAndRequire() {
+    let ctx = reqctx_new()
+    assert(ctx > 0)
+    assert_eq(reqctx_count(ctx), 0)
+    assert_eq(reqctx_has(ctx, "tenant"), 0)
+    assert_eq_str(reqctx_get(ctx, "tenant"), "")
+
+    assert_eq(reqctx_set(ctx, "tenant", "acme"), 1)
+    assert_eq(reqctx_set(ctx, "request_id", "r-1"), 1)
+    assert_eq(reqctx_count(ctx), 2)
+    assert_eq(reqctx_has(ctx, "tenant"), 1)
+    assert_eq_str(reqctx_get(ctx, "tenant"), "acme")
+    assert_eq(middleware_require_context(ctx, "tenant"), 1)
+    assert_eq(middleware_require_context(ctx, "missing"), 0)
+
+    assert_eq(reqctx_set(ctx, "tenant", "globex"), 1)
+    assert_eq(reqctx_count(ctx), 2)
+    assert_eq_str(reqctx_get(ctx, "tenant"), "globex")
+}
+
+fn TestMiddlewareTraceAndMethodPolicy() {
+    let ctx = reqctx_new()
+    let req = http_request_parse("POST /api/v1/users HTTP/1.1\r\n\r\n")
+
+    assert_eq(middleware_allow_methods(req, "GET,POST"), 1)
+    assert_eq(middleware_allow_methods(req, "GET, PUT"), 0)
+
+    assert_eq(middleware_next(ctx, "auth"), 1)
+    assert_eq(middleware_next(ctx, "tenant"), 1)
+    assert_eq(middleware_next(ctx, "handler"), 1)
+    assert_eq(middleware_ran(ctx, "auth"), 1)
+    assert_eq(middleware_ran(ctx, "missing"), 0)
+    assert_eq_str(middleware_trace(ctx), "auth>tenant>handler")
+}
+
+fn TestInvalidContextMiddleware() {
+    assert_eq(reqctx_set(0, "k", "v"), 0)
+    assert_eq(reqctx_count(0), 0)
+    assert_eq(middleware_next(0, "auth"), 0)
+    assert_eq_str(middleware_trace(0), "")
+}

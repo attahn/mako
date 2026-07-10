@@ -1,0 +1,5 @@
+fn main() {
+    let msg = pb_encode_simple("mako", 7)
+    print(pb_simple_name(msg))
+    print_int(pb_simple_id(msg))
+}

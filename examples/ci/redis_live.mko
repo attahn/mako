@@ -1,0 +1,12 @@
+// Live Redis probe for scripts/ci-redis.sh (docker on :6380 by default).
+fn main() {
+    let pong = redis_ping("127.0.0.1", 6380)
+    assert(str_eq(pong, "PONG"))
+    let ok = redis_set("127.0.0.1", 6380, "mako", "live")
+    assert(str_eq(ok, "OK"))
+    let v = redis_get("127.0.0.1", 6380, "mako")
+    assert(str_eq(v, "live"))
+    let n = redis_del("127.0.0.1", 6380, "mako")
+    assert(str_eq(n, "1"))
+    print(1)
+}

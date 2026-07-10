@@ -1,0 +1,21 @@
+// Angle-bracket generics dual-support + interface presence check
+
+interface Writer {
+    fn write(string) -> int
+}
+
+fn Writer_write(s: string) -> int {
+    print(s)
+    return str_len(s)
+}
+
+fn takes_result(r: Result<int, string>) -> int {
+    return result_unwrap_or(r, 0)
+}
+
+fn main() {
+    let xs: List<int> = [1, 2, 3]
+    print_int(len(xs))
+    print_int(takes_result(Ok(42)))
+    print_int(Writer_write("iface"))
+}

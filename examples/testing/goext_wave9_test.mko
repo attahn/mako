@@ -1,0 +1,13 @@
+fn TestRegexpUnicodeAndLookahead() {
+    assert(regex_match("\\p{L}+", "Cafe"))
+    assert(regex_match("\\p{L}+", "Café"))
+    assert(regex_match("\\p{Greek}+", "β"))
+    assert(regex_match("\\p{Cyrillic}+", "Ж"))
+    assert(regex_match("\\p{Nd}+", "٣"))
+    assert(not regex_match("\\p{Nd}+", "abc"))
+
+    assert(regex_match("foo(?=bar)bar", "foobar"))
+    assert(not regex_match("foo(?=baz)bar", "foobar"))
+    assert(regex_match("foo(?!baz)bar", "foobar"))
+    assert(not regex_match("foo(?!bar)bar", "foobar"))
+}

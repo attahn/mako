@@ -1,0 +1,6 @@
+fn set_level(level: string) { slog_set_level(level) }
+fn info(msg: string) { slog_info(msg) }
+fn warn(msg: string) { slog_warn(msg) }
+fn error(msg: string) { slog_error(msg) }
+fn debug(msg: string) { slog_debug(msg) }
+fn with(level: string, msg: string, key: string, val: string) { slog_with(level, msg, key, val) }

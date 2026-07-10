@@ -1,0 +1,37 @@
+fn TestMongoCompatHelpers() {
+    let info = mongo_connect_url("mongodb://user:pass@127.0.0.1:27018/app")
+    assert(str_contains(info, "driver=mongodb"))
+    assert(str_contains(info, "host=127.0.0.1"))
+    assert(str_contains(info, "port=27018"))
+    assert(str_contains(info, "db=app"))
+    assert(str_contains(info, "auth=1"))
+    assert_eq_str(mongo_connect_url("postgres://127.0.0.1/app"), "")
+
+    let req = mongo_find_one_request("users", "{\"id\":1}")
+    assert(str_contains(req, "\"find\":\"users\""))
+    assert(str_contains(req, "\"limit\":1"))
+    assert(str_contains(req, "\"id\":1"))
+}
+
+fn TestCassandraClickhouseElasticCompatHelpers() {
+    let cass = cassandra_connect_url("cassandra://db.local:9142/appks")
+    assert(str_contains(cass, "driver=cassandra"))
+    assert(str_contains(cass, "port=9142"))
+    assert(str_contains(cass, "db=appks"))
+    assert_eq_str(cassandra_select("appks", "users", "id = ?"), "select * from appks.users where id = ?")
+
+    let ch = clickhouse_connect_url("clickhouse://analytics.local:8124/default")
+    assert(str_contains(ch, "driver=clickhouse"))
+    assert(str_contains(ch, "port=8124"))
+    assert(str_contains(ch, "db=default"))
+    assert_eq_str(clickhouse_select("default", "events", "limit 10"), "select * from default.events limit 10")
+
+    let es = elastic_connect_url("elasticsearch://search.local:9201/logs")
+    assert(str_contains(es, "driver=elasticsearch"))
+    assert(str_contains(es, "host=search.local"))
+    assert(str_contains(es, "port=9201"))
+    assert(str_contains(es, "db=logs"))
+    let sr = elastic_search_request("logs", "{\"query\":{\"match_all\":{}}}")
+    assert(str_contains(sr, "POST /logs/_search"))
+    assert(str_contains(sr, "match_all"))
+}

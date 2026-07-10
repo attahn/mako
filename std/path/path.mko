@@ -1,0 +1,6 @@
+fn join_path(a: string, b: string) -> string { return path_join(a, b) }
+fn clean(p: string) -> string { return path_clean(p) }
+fn base(p: string) -> string { return path_base(p) }
+fn dir(p: string) -> string { return path_dir(p) }
+fn ext(p: string) -> string { return path_ext(p) }
+fn is_abs(p: string) -> bool { return path_is_abs(p) }

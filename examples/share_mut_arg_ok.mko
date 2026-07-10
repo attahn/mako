@@ -1,0 +1,11 @@
+fn bump(mut x: int) {
+    x = x + 1
+}
+
+fn main() {
+    let mut n = 1
+    share let s = share_int(n)
+    share_drop(s)
+    bump(n)
+    print_int(n)
+}

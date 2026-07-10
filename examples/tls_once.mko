@@ -1,0 +1,13 @@
+// HTTPS one-shot via OpenSSL (dev cert in runtime/certs/)
+// Build+run, then curl -k https://127.0.0.1:18443/ from another shell —
+// this process accepts one connection and exits.
+
+fn main() {
+    let code = tls_serve_once(
+        18443,
+        "runtime/certs/dev.crt",
+        "runtime/certs/dev.key",
+        "tls-ok\n"
+    )
+    print_int(code)
+}

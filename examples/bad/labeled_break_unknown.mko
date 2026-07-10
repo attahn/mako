@@ -1,0 +1,6 @@
+// Must fail: unknown loop label.
+fn main() {
+    while true {
+        break missing
+    }
+}

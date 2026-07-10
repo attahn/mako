@@ -1,0 +1,7 @@
+// Parameterized SQLite query (zero placeholders = static SQL only).
+fn TestSqliteParamsShape() {
+    let n = sqlite_query_int(":memory:", "select 1")
+    if n != 1 {
+        assert(n == -1)
+    }
+}

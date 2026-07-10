@@ -1,0 +1,90 @@
+fn TestSqlTypedSelectCheck() {
+    let schema = "users.id:int!,users.email:string!,users.age:int?,orders.total:int!"
+
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "select id,email from users where id = ?",
+            "int",
+            "id:int!,email:string!"
+        ),
+        1
+    )
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "select id,email from users where id = ?",
+            "string",
+            "id:int!,email:string!"
+        ),
+        0
+    )
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "select id,missing from users where id = ?",
+            "int",
+            "id:int!,missing:string!"
+        ),
+        0
+    )
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "select age from users",
+            "",
+            "age:int!"
+        ),
+        0
+    )
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "select age from users",
+            "",
+            "age:int?"
+        ),
+        1
+    )
+}
+
+fn TestSqlTypedInsertCheck() {
+    let schema = "users.id:int!,users.email:string!,users.age:int?"
+
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "insert into users (id,email) values (?,?)",
+            "int,string",
+            ""
+        ),
+        1
+    )
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "insert into users (id,email) values (?,?)",
+            "int",
+            ""
+        ),
+        0
+    )
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "insert into users (id,email) values (?,?)",
+            "int,int",
+            ""
+        ),
+        0
+    )
+    assert_eq(
+        sql_check_typed(
+            schema,
+            "insert into users (id,nope) values (?,?)",
+            "int,string",
+            ""
+        ),
+        0
+    )
+}

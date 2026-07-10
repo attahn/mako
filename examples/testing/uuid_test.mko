@@ -1,0 +1,43 @@
+fn TestUuidFormat() {
+    let id = uuid_v4()
+    let s = uuid_string(id)
+    assert_eq(len(s), 36)
+    // dashes at 8,13,18,23
+    assert_eq(int(s[8]), 45)
+    assert_eq(int(s[13]), 45)
+    assert_eq(int(s[18]), 45)
+    assert_eq(int(s[23]), 45)
+    // version nibble '4' at position 14
+    assert_eq(int(s[14]), 52)
+}
+
+fn TestUuidRoundtrip() {
+    let id = uuid_v4()
+    let s = uuid_string(id)
+    let id2 = uuid_parse(s)
+    assert(uuid_eq(id, id2))
+    assert(uuid_parse_ok(s))
+}
+
+fn TestUuidParseReject() {
+    assert(not uuid_parse_ok(""))
+    assert(not uuid_parse_ok("short"))
+    assert(not uuid_parse_ok("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"))
+    assert(uuid_is_nil(uuid_nil()))
+    assert(uuid_is_nil(uuid_parse("bad")))
+}
+
+fn TestUuidCheck() {
+    let id = uuid_v4()
+    let s = uuid_string(id)
+    let r = uuid_check(s)
+    match r {
+        Ok(n) => assert_eq(n, 1)
+        Err(_) => assert_eq(0, 1)
+    }
+    let bad = uuid_check("nope")
+    match bad {
+        Ok(_) => assert_eq(0, 1)
+        Err(_) => assert(true)
+    }
+}

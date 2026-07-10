@@ -1,0 +1,1 @@
+fn type_by_ext(path: string) -> string { return mime_type(path) }

@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install clang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Install LLVM/clang (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm -y
+        continue-on-error: true
+
+      - name: Ensure clang on PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $clang = Get-Command clang -ErrorAction SilentlyContinue
+          if (-not $clang) {
+            $candidates = @(
+              "C:\Program Files\LLVM\bin",
+              "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\Llvm\x64\bin",
+              "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\Llvm\x64\bin"
+            )
+            foreach ($c in $candidates) {
+              if (Test-Path "$c\clang.exe") {
+                echo "$c" >> $env:GITHUB_PATH
+                break
+              }
+            }
+          }
+          clang --version
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Version
+        shell: bash
+        run: ./target/release/mako --version
+
+      - name: Help
+        shell: bash
+        run: ./target/release/mako --help
+
+      - name: Default test suite
+        shell: bash
+        run: cargo run --quiet --release -- test examples/testing
+        env:
+          # Live TLS/QUIC/nghttp2 smokes stay opt-in; suite skips without deps.
+          MAKO_LIVE_TLS: ""
+          MAKO_LIVE_NGHTTP2: ""
+          MAKO_LIVE_QUIC: ""
+
+      - name: Init smoke
+        shell: bash
+        run: |
+          ./target/release/mako init "${RUNNER_TEMP}/mako-ci-demo" --name ci-demo
+          ./target/release/mako run "${RUNNER_TEMP}/mako-ci-demo/main.mko"
+
+  cross-smoke:
+    name: Cross-compile smoke (Linux → Windows + static musl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install clang + zig
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang xz-utils
+          curl -sL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz | sudo tar -xJ -C /opt
+          echo "/opt/zig-linux-x86_64-0.13.0" >> "$GITHUB_PATH"
+
+      - name: Build mako
+        run: cargo build --release
+
+      - name: Cross-compile hello to Windows
+        run: |
+          ./target/release/mako init /tmp/mako-cross --name cross-hello
+          ./target/release/mako build /tmp/mako-cross/main.mko \
+            --target x86_64-pc-windows-gnu \
+            -o /tmp/mako-cross/hello.exe
+          file /tmp/mako-cross/hello.exe || ls -la /tmp/mako-cross/
+          test -f /tmp/mako-cross/hello.exe
+
+      - name: Cross-compile static Linux musl hello
+        run: |
+          ./target/release/mako init /tmp/mako-musl --name musl-hello
+          ./target/release/mako build /tmp/mako-musl/main.mko \
+            --target x86_64-unknown-linux-musl \
+            -o /tmp/mako-musl/hello-static
+          file /tmp/mako-musl/hello-static
+          test -f /tmp/mako-musl/hello-static
+          if ldd /tmp/mako-musl/hello-static 2>&1 | grep -Eqi 'not a dynamic executable|statically linked'; then
+            echo "static musl link verified"
+          else
+            echo "expected a static musl binary" >&2
+            ldd /tmp/mako-musl/hello-static || true
+            exit 1
+          fi
+
+      - name: Upload cross artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mako-cross-x86_64-pc-windows-gnu-hello
+          path: |
+            /tmp/mako-cross/hello.exe
+            /tmp/mako-musl/hello-static

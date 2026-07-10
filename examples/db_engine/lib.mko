@@ -1,0 +1,100 @@
+// Append-only key-value store library (mini embedded engine).
+// Format: lines `PUT <key> <value>\n` and `DEL <key>\n`. Last write wins.
+
+fn kv_path() -> string {
+    return "/tmp/mako_kv_engine.log"
+}
+
+fn kv_reset() {
+    let _ = remove_file(kv_path())
+}
+
+fn kv_put(key: string, val: string) -> int {
+    let mut b = str_builder()
+    builder_write(b, "PUT ")
+    builder_write(b, key)
+    builder_write(b, " ")
+    builder_write(b, val)
+    builder_write(b, "\n")
+    return append_file(kv_path(), builder_string(b))
+}
+
+fn kv_del(key: string) -> int {
+    let mut b = str_builder()
+    builder_write(b, "DEL ")
+    builder_write(b, key)
+    builder_write(b, "\n")
+    return append_file(kv_path(), builder_string(b))
+}
+
+fn kv_load() -> map[string]string {
+    let mut m = make(map[string]string)
+    let raw = read_file(kv_path())
+    if str_eq(raw, "") {
+        return m
+    }
+    let data = bytes(raw)
+    let n = len(data)
+    let mut i = 0
+    while i < n {
+        let mut line = str_builder()
+        while i < n {
+            let ch = data[i]
+            i = i + 1
+            if int(ch) == 10 {
+                break
+            }
+            builder_write_byte(line, ch)
+        }
+        let s = builder_string(line)
+        if str_contains(s, "PUT ") {
+            let lb = bytes(s)
+            if len(lb) >= 5 {
+                let mut keyb = str_builder()
+                let mut valb = str_builder()
+                let mut j = 4
+                let mut in_val = 0
+                while j < len(lb) {
+                    let c = lb[j]
+                    j = j + 1
+                    if in_val == 0 {
+                        if int(c) == 32 {
+                            in_val = 1
+                        } else {
+                            builder_write_byte(keyb, c)
+                        }
+                    } else {
+                        builder_write_byte(valb, c)
+                    }
+                }
+                let k = builder_string(keyb)
+                let v = builder_string(valb)
+                if not str_eq(k, "") {
+                    m[k] = v
+                }
+            }
+        } else {
+            if str_contains(s, "DEL ") {
+                let lb = bytes(s)
+                if len(lb) >= 5 {
+                    let mut keyb = str_builder()
+                    let mut j = 4
+                    while j < len(lb) {
+                        builder_write_byte(keyb, lb[j])
+                        j = j + 1
+                    }
+                    let k = builder_string(keyb)
+                    delete(m, k)
+                }
+            }
+        }
+    }
+    return m
+}
+
+fn kv_get(m: map[string]string, key: string) -> string {
+    if has(m, key) {
+        return m[key]
+    }
+    return ""
+}

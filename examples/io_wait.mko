@@ -1,0 +1,15 @@
+// Async I/O seed: io_wait is a normal sync fn; runtime uses select().
+// No colored async — wait on a listen socket with timeout.
+
+fn main() {
+    let fd = tcp_listen(18091)
+    if fd < 0 {
+        print("listen failed")
+        return
+    }
+    // Nobody connects — expect timeout (0)
+    let ready = io_wait(fd, 50)
+    print_int(ready)
+    let _ = tcp_close(fd)
+    print("io_wait done")
+}

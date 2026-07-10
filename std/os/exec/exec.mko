@@ -1,0 +1,2 @@
+fn output(cmd: string) -> string { return exec_output(cmd) }
+fn run(cmd: string) -> int { return exec_run(cmd) }

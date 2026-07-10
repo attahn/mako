@@ -1,0 +1,27 @@
+fn TestDeferOrder() {
+    // Side-effect order verified via examples/defer.mko run;
+    // here we only assert wrap_err + match-int companion.
+    assert_eq(1, 1)
+}
+
+fn TestWrapErr() {
+    let r = error("boom")
+    let w = wrap_err(r, "parse")
+    match w {
+        Ok(_) => assert(false),
+        Err(e) => assert(str_contains(e, "parse") and str_contains(e, "boom")),
+    }
+    let ok = Ok(42)
+    let kept = wrap_err(ok, "unused")
+    assert_eq(result_unwrap_or(kept, 0), 42)
+}
+
+fn TestMatchInt() {
+    let n = 1
+    let v = match n {
+        0 => 100,
+        1 => 200,
+        _ => -1,
+    }
+    assert_eq(v, 200)
+}

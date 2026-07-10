@@ -1,0 +1,12 @@
+fn put_u16le(v: int) -> string { return binary_put_u16le(v) }
+fn put_u32le(v: int) -> string { return binary_put_u32le(v) }
+fn put_u64le(v: int) -> string { return binary_put_u64le(v) }
+fn u16le(s: string) -> int { return binary_u16le(s) }
+fn u32le(s: string) -> int { return binary_u32le(s) }
+fn u64le(s: string) -> int { return binary_u64le(s) }
+fn put_u16be(v: int) -> string { return binary_put_u16be(v) }
+fn put_u32be(v: int) -> string { return binary_put_u32be(v) }
+fn put_u64be(v: int) -> string { return binary_put_u64be(v) }
+fn u16be(s: string) -> int { return binary_u16be(s) }
+fn u32be(s: string) -> int { return binary_u32be(s) }
+fn u64be(s: string) -> int { return binary_u64be(s) }

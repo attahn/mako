@@ -1,0 +1,10 @@
+// Must succeed: else arm may use hold; then arm moves it (checked independently).
+fn main() {
+    hold let x = "hi"
+    if 0 == 1 {
+        let y = x
+        print(y)
+    } else {
+        print(x)
+    }
+}

@@ -1,0 +1,32 @@
+import "strings"
+import "path"
+import "fmt"
+import "sync"
+
+fn TestStdImportStrings() {
+    assert(strings.contains("hello", "ell"))
+    assert(strings.has_prefix("mako", "ma"))
+    let parts = strings.split("a,b", ",")
+    assert_eq_str(strings.concat(parts, "-"), "a-b")
+    assert_eq_str(strings.trim_space("  x  "), "x")
+}
+
+fn TestStdImportPathFmt() {
+    assert_eq_str(path.clean("/a/../b"), "/b")
+    assert_eq_str(path.join_path("a", "b"), "a/b")
+    assert_eq_str(fmt.sprintf("hi %s", "mako"), "hi mako")
+    assert_eq_str(fmt.int(7), "7")
+}
+
+fn TestStdImportSync() {
+    let m = sync.rwmutex()
+    sync.rlock(m)
+    sync.runlock(m)
+    sync.wlock(m)
+    sync.wunlock(m)
+    let wg = sync.wait_group()
+    sync.add(wg, 1)
+    sync.done(wg)
+    sync.wait(wg)
+    assert(true)
+}

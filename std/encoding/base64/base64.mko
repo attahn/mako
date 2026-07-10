@@ -1,0 +1,2 @@
+fn encode(s: string) -> string { return base64_encode(s) }
+fn decode(s: string) -> string { return base64_decode(s) }

@@ -1,0 +1,6 @@
+fn main() {
+    hold let mut x = "a"
+    hold let y = x
+    x = "b"
+    print(y)
+}

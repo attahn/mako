@@ -1,0 +1,4 @@
+fn main() {
+    let mut m = make(map[string]int)
+    m[1] = 2
+}

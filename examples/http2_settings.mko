@@ -1,0 +1,5 @@
+fn main() {
+    let s = http2_empty_settings()
+    print_int(len(s))
+    print_int(http2_settings_len(s))
+}

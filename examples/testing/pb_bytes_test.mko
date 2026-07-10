@@ -1,0 +1,15 @@
+fn TestPbBytes() {
+    let e = pb_encode_bytes("hi")
+    assert_eq(pb_bytes_len(e), 2)
+    let empty = pb_encode_bytes("")
+    assert_eq(pb_bytes_len(empty), 0)
+    // field 1 = 150 → key 0x08, value 0x96 0x01
+    let f = pb_encode_field_varint(1, 150)
+    assert_eq(pb_key_field(f), 1)
+    assert_eq(pb_key_wire(f), 0)
+    assert_eq(len(f), 3)
+}
+
+fn TestPbZigzagStill() {
+    assert_eq(pb_zigzag_encode(-1), 1)
+}

@@ -1,0 +1,7 @@
+fn TestWaitGroupBasic() {
+    let wg = wait_group_new()
+    wait_group_add(wg, 1)
+    wait_group_done(wg)
+    wait_group_wait(wg)
+    assert(true)
+}

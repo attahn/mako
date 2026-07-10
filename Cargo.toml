@@ -1,0 +1,15 @@
+[package]
+name = "mako"
+version = "0.1.0"
+edition = "2021"
+description = "Mako — systems/backend language compiler (Python-clear, Go-fast, type-safe)"
+license = "MIT"
+
+[[bin]]
+name = "mako"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+regex = "1"
+thiserror = "2"

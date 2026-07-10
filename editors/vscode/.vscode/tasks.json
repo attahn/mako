@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Mako: Check",
+      "type": "shell",
+      "command": "mako",
+      "args": [
+        "check",
+        "${file}"
+      ],
+      "problemMatcher": "$mako"
+    },
+    {
+      "label": "Mako: Build Active File",
+      "type": "shell",
+      "command": "mako",
+      "args": [
+        "build",
+        "${file}",
+        "-o",
+        "${workspaceFolder}/${fileBasenameNoExtension}"
+      ],
+      "problemMatcher": "$mako"
+    },
+    {
+      "label": "Mako: Test Workspace",
+      "type": "shell",
+      "command": "mako",
+      "args": [
+        "test",
+        "."
+      ],
+      "problemMatcher": "$mako"
+    }
+  ]
+}

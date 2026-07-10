@@ -1,0 +1,11 @@
+// Must fail: share still live on the path that skips `then` (which only returns).
+// `if cond { return }` must not end the borrow for code after the if.
+fn main() {
+    let mut x = 1
+    share let s = share_int(x)
+    if x > 0 {
+        return
+    }
+    x = 2
+    print_int(share_get(s))
+}

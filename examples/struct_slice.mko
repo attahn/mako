@@ -1,0 +1,28 @@
+// Struct value literals, field access/assign, []Struct
+
+struct Point {
+    x: int
+    y: int
+}
+
+fn main() {
+    let mut p = Point { x: 3, y: 4 }
+    print_int(p.x)
+    print_int(p.y)
+    p.x = 10
+    print_int(p.x)
+
+    let mut xs = make([]Point, 0, 4)
+    xs = append(xs, Point { x: 1, y: 2 })
+    xs = append(xs, Point { x: 5, y: 6 })
+    print_int(len(xs))
+    print_int(xs[0].x)
+    print_int(xs[1].y)
+
+    let lit: []Point = [Point { x: 7, y: 8 }, Point { x: 9, y: 10 }]
+    print_int(len(lit))
+    for i, v in range lit {
+        print_int(i)
+        print_int(v.x)
+    }
+}

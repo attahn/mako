@@ -1,0 +1,25 @@
+fn TestFixedTimestepHelpers() {
+    assert_eq(game_fixed_steps(50, 16, 8), 3)
+    assert_eq(game_fixed_remainder(50, 16, 8), 2)
+    assert_eq(game_alpha(8, 16, 1000), 500)
+
+    assert_eq(game_fixed_steps(1000, 16, 5), 5)
+    assert_eq(game_fixed_remainder(1000, 16, 5), 920)
+    assert_eq(game_alpha(16, 16, 1000), 1000)
+}
+
+fn TestFixedTimestepInvalidInputs() {
+    assert_eq(game_fixed_steps(0, 16, 8), 0)
+    assert_eq(game_fixed_steps(10, 0, 8), 0)
+    assert_eq(game_fixed_steps(10, 16, 0), 0)
+    assert_eq(game_fixed_remainder(-1, 16, 8), 0)
+    assert_eq(game_alpha(-1, 16, 1000), 0)
+    assert_eq(game_alpha(1, 0, 1000), 0)
+}
+
+fn TestFrameBudget() {
+    let start = now_ms()
+    assert_eq(game_frame_budget_ok(start, 1000), 1)
+    sleep_ms(2)
+    assert_eq(game_frame_budget_ok(start, -1), 0)
+}

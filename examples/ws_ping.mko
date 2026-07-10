@@ -1,0 +1,5 @@
+// WebSocket echo once — supports text, binary, and auto-pong for ping
+
+fn main() {
+    print_int(ws_echo_once(18095))
+}
