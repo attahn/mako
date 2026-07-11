@@ -277,14 +277,47 @@ mako run fib.mko
 
 ## Working with multiple files
 
-For multi-file projects, use imports:
+Most projects need more than one file. Mako handles this with `import` -- you
+point at a file, and its functions become available. When you `mako run main.mko`,
+the compiler automatically pulls in everything that's imported.
+
+### Basic file import
+
+Start with two files side by side:
 
 ```mko
 // lib.mko
 fn add(a: int, b: int) -> int {
     return a + b
 }
+
+fn greet(name: string) -> string {
+    return "hi " + name
+}
 ```
+
+```mko
+// main.mko
+import "./lib.mko"
+
+fn main() {
+    print_int(lib_add(2, 3))
+    print(lib_greet("mako"))
+}
+```
+
+```bash
+mako run main.mko
+# 5
+# hi mako
+```
+
+Without an alias, the imported file's functions merge into your scope directly.
+By convention, prefix them (e.g. `lib_add`) to avoid collisions.
+
+### Aliased imports
+
+Give the import a name and access everything through that namespace:
 
 ```mko
 // main.mko
@@ -295,10 +328,92 @@ fn main() {
 }
 ```
 
+This is especially useful when you import multiple files that might have
+overlapping function names.
+
+### Growing into a multi-file project
+
+Say you're building a small service. Start with `mako init`, then add files
+as you go:
+
 ```bash
-mako run main.mko
-# 5
+mako init myservice --name myservice
+cd myservice
 ```
+
+```
+myservice/
+  mako.toml
+  main.mko
+  routes.mko       # you add this
+  db.mko           # you add this
+```
+
+```mko
+// db.mko
+fn db_init() {
+    print("database ready")
+}
+
+fn db_count() -> int {
+    return 42
+}
+```
+
+```mko
+// routes.mko
+fn routes_health(c: int) {
+    let _ = http_respond_json(c, 200, "{\"ok\":true}")
+}
+```
+
+```mko
+// main.mko
+import "./routes.mko"
+import "./db.mko"
+
+fn main() {
+    db_init()
+    let fd = http_bind(8080)
+    print("listening on :8080")
+    // handle requests...
+}
+```
+
+### Grouped imports
+
+When you have several imports, group them into a single block:
+
+```mko
+import (
+    "./routes.mko"
+    "./db.mko"
+    "strings"
+)
+```
+
+The formatter (`mako fmt`) will automatically rewrite multiple single `import`
+lines into this grouped form.
+
+### Standard library imports
+
+Mako ships with a standard library. Import its modules by name (no `./` prefix):
+
+```mko
+import "strings"
+import "net/http"
+
+fn main() {
+    print(strings.trim("  hello  "))
+}
+```
+
+### When to use packages instead
+
+File imports work great within a single project. When you want to share code
+across projects, or your codebase grows large enough to need separate build
+units, reach for packages and workspaces -- covered in
+[Chapter 10: Packages](ch10-packages.md).
 
 ## Editor setup
 

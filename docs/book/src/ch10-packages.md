@@ -101,29 +101,63 @@ fn main() {
 
 The imported file's functions become available in the importing file's scope.
 By convention, helper files prefix their functions with `lib_` or a meaningful
-module prefix.
+module prefix to avoid name collisions.
+
+When you run `mako run main.mko`, the compiler automatically finds and compiles
+all imported files -- you don't need to list them on the command line.
+
+### Aliased imports
+
+Give an import a namespace with `as`. This is the cleanest way to avoid naming
+conflicts when pulling in multiple files:
+
+```mko
+import "./db.mko" as db
+import "./routes.mko" as routes
+
+fn main() {
+    db.init()
+    routes.serve(8080)
+}
+```
+
+With an alias, you call functions through the alias name (`db.init()`) instead
+of relying on prefixed function names. This works for both local file imports
+and standard library imports.
 
 ### Standard library imports
 
 ```mko
 import "strings"
 import "path"
+import "net/http"
 import "sync"
 ```
 
 These resolve from the standard library directory (`std/`, overrideable via the
-`MAKO_STD` environment variable).
+`MAKO_STD` environment variable). Standard library modules are accessed through
+their module name as a namespace:
+
+```mko
+import "strings"
+
+fn main() {
+    print(strings.trim("  hello  "))
+    print(strings.contains("mako lang", "mako"))
+}
+```
 
 ### Grouped imports
 
-When you have multiple imports, use the grouped syntax:
+When you have multiple imports, use the grouped syntax. This works for both
+standard library and local file imports:
 
 ```mko
 import (
     "strings"
     "path"
-    "sync"
-    "fmt"
+    "./db.mko"
+    "./routes.mko"
 )
 
 fn main() {

@@ -91,7 +91,7 @@
       "patterns": [
         {
           "name": "storage.type.mako",
-          "match": "\\b(int|int64|int32|int8|uint64|byte|float|bool|string|void|Result|Option|Job|Crew|HttpRequest)\\b"
+          "match": "\\b(int|int64|int32|int8|uint64|byte|float|bool|string|void|Result|Option|Job|Crew|HttpRequest|CMap|MMap|EvLoop|Buf|GameUDP|CHash|RateLimiter|CircuitBreaker|HttpEngine|SqlDB|Mutex|RWMutex|BufReader|BufWriter|StrBuilder|chan)\\b"
         }
       ]
     },

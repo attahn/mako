@@ -342,6 +342,92 @@ mako pkg lock
 mako pkg audit
 ```
 
+## Multi-file projects
+
+Real programs outgrow a single file pretty fast. Mako makes splitting things up
+straightforward -- just `import` what you need, and `mako run` pulls everything
+together automatically.
+
+**Same-directory imports** -- the simplest case. Put your helpers in a separate
+file and import them:
+
+```mko
+// lib.mko
+fn kv_put(key: string, val: string) -> int {
+    // ...
+}
+
+fn kv_get(m: map[string]string, key: string) -> string {
+    // ...
+}
+```
+
+```mko
+// main.mko
+import "./lib.mko"
+
+fn main() {
+    let _ = kv_put("name", "mako")
+}
+```
+
+```bash
+mako run main.mko     # automatically compiles lib.mko too
+```
+
+**Aliased imports** -- give an imported file a namespace to keep things tidy:
+
+```mko
+import "./db.mko" as db
+import "./routes.mko" as routes
+
+fn main() {
+    db.init()
+    routes.serve(8080)
+}
+```
+
+**Grouped imports** -- when you have several, group them in one block:
+
+```mko
+import (
+    "./routes.mko"
+    "./db.mko"
+    "strings"
+)
+```
+
+**Package dependencies** -- for code that lives in a separate directory with its
+own `mako.toml`, declare it as a dependency and call it by name:
+
+```toml
+# app/mako.toml
+[dependencies]
+helper = { path = "../helper" }
+```
+
+```mko
+// app/main.mko
+fn main() {
+    print_int(helper.add(1, 2))
+}
+```
+
+**Workspaces** -- when your project grows to multiple packages, a workspace
+keeps them organized under one roof:
+
+```toml
+# mako.toml (workspace root)
+[workspace]
+members = ["core", "helper", "app"]
+```
+
+Each member has its own `mako.toml` and can depend on siblings. Build and test
+everything from the root with `mako check .` or `mako run -p app`.
+
+Working examples live in `examples/db_engine/` (file imports) and
+`examples/pkg_path_dep/` (workspace with package dependencies).
+
 ## Documentation
 
 | | |

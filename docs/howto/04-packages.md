@@ -208,40 +208,241 @@ This checks offline -- no network required.
 
 ## Imports (multi-file)
 
-Within a single package, use `import` to pull in other files:
+Most real projects need more than one file. Mako's `import` statement handles
+this -- and `mako run` automatically compiles everything that's imported.
+
+### Basic file import
+
+```mko
+// utils.mko
+fn format_name(first: string, last: string) -> string {
+    return first + " " + last
+}
+```
 
 ```mko
 // main.mko
 import "./utils.mko"
-import "./handlers.mko" as handlers
 
 fn main() {
-    handlers.serve(8080)
+    print(format_name("Grace", "Hopper"))
 }
 ```
 
-Standard library packages:
+```bash
+mako run main.mko
+# Grace Hopper
+```
+
+### Aliased imports
+
+Use `as` to give an import a namespace. This avoids naming conflicts and makes
+it clear where each function comes from:
 
 ```mko
-import "strings"
-import "path"
+import "./db.mko" as db
+import "./routes.mko" as routes
 
 fn main() {
-    assert(strings.contains("mako", "ma"))
+    db.connect()
+    routes.serve(8080)
 }
 ```
 
-Grouped imports (preferred style):
+### Grouped imports
+
+When you have several imports, group them into one block:
 
 ```mko
 import (
+    "./routes.mko"
+    "./db.mko"
     "strings"
-    "path"
-    lib "./mylib.mko"
+    "net/http"
 )
 ```
 
-`mako fmt` will sort and group your imports automatically.
+`mako fmt` will rewrite separate `import` lines into this grouped form
+automatically.
+
+### Standard library imports
+
+Import standard library modules by name (no `./` prefix). They're accessed
+through their module name:
+
+```mko
+import "strings"
+
+fn main() {
+    print(strings.trim("  hello  "))
+}
+```
+
+## Walkthrough: building a multi-file project
+
+Here's how to go from a single file to a well-organized multi-file project,
+step by step.
+
+**Step 1: Start the project**
+
+```bash
+mako init taskapi --name taskapi
+cd taskapi
+```
+
+You get `mako.toml` and `main.mko`.
+
+**Step 2: Add a data layer**
+
+Create `db.mko` alongside `main.mko`:
+
+```mko
+// db.mko
+fn db_init() {
+    let _ = sqlite_query_int("/tmp/tasks.db",
+        "CREATE TABLE IF NOT EXISTS tasks(id INTEGER PRIMARY KEY, title TEXT, done INT)")
+}
+
+fn db_add_task(title: string) -> int {
+    return sqlite_query_int("/tmp/tasks.db",
+        "INSERT INTO tasks(title, done) VALUES ('" + title + "', 0)")
+}
+
+fn db_task_count() -> int {
+    return sqlite_query_int("/tmp/tasks.db", "SELECT COUNT(*) FROM tasks")
+}
+```
+
+**Step 3: Add route handlers**
+
+Create `routes.mko`:
+
+```mko
+// routes.mko
+fn route_health(c: int) {
+    let _ = http_respond_json(c, 200, "{\"ok\":true}")
+}
+
+fn route_add_task(c: int) {
+    let body = http_body(c)
+    let title = json_get_string(body, "title")
+    let _ = db_add_task(title)
+    let _ = http_respond_json(c, 201, "{\"created\":true}")
+}
+
+fn route_stats(c: int) {
+    let count = db_task_count()
+    let _ = http_respond_json(c, 200, json_ss("count", format_int(count)))
+}
+```
+
+**Step 4: Wire it together in main.mko**
+
+```mko
+// main.mko
+import "./db.mko"
+import "./routes.mko"
+
+fn main() {
+    db_init()
+    let fd = http_bind(8080)
+    print("taskapi on :8080")
+
+    while true {
+        let c = http_accept(fd)
+        let path = http_path(c)
+
+        if str_eq(path, "/health") {
+            route_health(c)
+        } else {
+            if str_eq(path, "/tasks") {
+                route_add_task(c)
+            } else {
+                if str_eq(path, "/stats") {
+                    route_stats(c)
+                } else {
+                    let _ = http_respond(c, 404, "not found\n")
+                }
+            }
+        }
+        let _ = http_close(c)
+    }
+}
+```
+
+**Step 5: Run it**
+
+```bash
+mako run main.mko
+# taskapi on :8080
+```
+
+That's it. The compiler follows the imports and compiles `db.mko` and
+`routes.mko` automatically.
+
+**Your project now looks like this:**
+
+```
+taskapi/
+  mako.toml
+  main.mko        # entry point, imports everything
+  db.mko          # data layer
+  routes.mko      # HTTP handlers
+```
+
+## Extracting a shared package
+
+Once code is useful across multiple projects, move it into its own package.
+
+**Step 1: Create the shared package**
+
+```bash
+mkdir -p ../shared
+cd ../shared
+mako pkg init shared
+```
+
+Put reusable code in `lib.mko`:
+
+```mko
+// shared/lib.mko
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn greet(name: string) -> string {
+    return "hi " + name
+}
+```
+
+**Step 2: Add it as a dependency**
+
+Back in your app:
+
+```bash
+cd ../taskapi
+mako pkg add shared ../shared
+```
+
+This adds to your `mako.toml`:
+
+```toml
+[dependencies]
+shared = { path = "../shared" }
+```
+
+**Step 3: Use it**
+
+```mko
+// main.mko
+fn main() {
+    print(shared.greet("world"))
+    print_int(shared.add(1, 2))
+}
+```
+
+Package functions are called through the dependency name as a namespace --
+`shared.greet()`, not `greet()`.
 
 ## Next steps
 
