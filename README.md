@@ -264,6 +264,8 @@ helper = { path = "../helper" }
 | [Language Spec](LANGUAGE_SPEC.md) | Formal specification |
 | [CLI Reference](docs/CLI.md) | Every command, flag, and workflow |
 | [Tutorials](website/tutorials/) | Backend, game networking, databases, FFI, concurrency, cloud |
+| [Examples](docs/EXAMPLES.md) | 14 complete runnable programs for newcomers |
+| [Debugging](docs/DEBUG.md) | dbg(), lldb, sanitizers, error messages |
 | [Security](docs/SECURITY.md) | Safety model |
 | [Performance](docs/PERFORMANCE.md) | Benchmarks |
 | [Status](docs/STATUS.md) | What works, what doesn't |
