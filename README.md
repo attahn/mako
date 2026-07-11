@@ -6,8 +6,9 @@ breaking flow, and the feeling that safe code shouldn't be this hard to write.
 
 So I built a language. Mako gives you memory safety through ownership and arenas
 instead of a garbage collector, structured concurrency that cleans up after
-itself, and a standard library that covers what you actually need for backend
-work — HTTP, TLS, JSON, databases, crypto, all there out of the box.
+itself, and a standard library that covers what you actually need for real
+work — HTTP, TLS, databases, crypto, event loops, binary protocols, and more,
+all there out of the box.
 
 The compiler turns `.mko` source files into C, then clang (or zig) produces
 a native binary. One file in, one binary out. No runtime to deploy, no VM to
@@ -18,7 +19,7 @@ the standard library has real coverage. But this is early days — expect rough
 edges, breaking changes, and things that aren't done yet. If that's exciting to
 you rather than scary, you're in the right place.
 
-[Full status](docs/STATUS.md) · [What's next](docs/ROADMAP.md)
+[Website](https://mako-lang.com) · [Full status](docs/STATUS.md) · [What's next](docs/ROADMAP.md)
 
 ---
 
@@ -96,8 +97,8 @@ arena a {
 ### Structured concurrency
 
 The `crew` block manages concurrent tasks and guarantees cleanup. When the
-block ends, every task is joined. No orphaned threads, no forgotten cleanup,
-no leaked goroutines. Channels handle communication between tasks:
+block ends, every task is joined. No orphaned threads, no forgotten cleanup.
+Channels handle communication between tasks:
 
 ```mko
 fn producer(ch: chan[int], n: int) -> int {
@@ -148,9 +149,24 @@ fn load() -> Result[int, string] {
 
 ### A standard library you can actually use
 
-HTTP servers, TLS, WebSocket, JSON, database drivers (SQLite, Postgres), crypto,
-compression, regex, email, encoding, file I/O, and more. Build a JSON API in
-one file:
+Mako ships with a broad standard library so you can build real services without
+hunting for third-party packages:
+
+| Area | What's included |
+|------|----------------|
+| **Networking** | HTTP server/client, TLS/HTTPS, HTTP/2, WebSocket, TCP, UDP, QUIC |
+| **Data** | JSON, CSV, XML, base64, hex, gob, binary encoding |
+| **Databases** | SQLite, PostgreSQL (parameterized queries, transactions) |
+| **Crypto** | SHA-256, SHA-512, HMAC, AES-GCM, argon2, constant-time compare |
+| **Concurrency** | Channels, actors, CMap (concurrent hashmap), mutex, RWMutex |
+| **I/O** | Buffered I/O, direct I/O, memory-mapped files, file system ops |
+| **Infrastructure** | Event loop (epoll/kqueue), rate limiter, circuit breaker, consistent hashing |
+| **Game networking** | UDP with peer tracking, tick timing, binary buffers |
+| **HTTP engine** | Declarative routing, multi-core, zero-allocation hot path |
+| **Text** | Strings, regex, strconv, unicode/utf8, fmt, templates |
+| **System** | OS, path, env, exec, flag, time, math, compress/gzip |
+
+Build a JSON API in one file:
 
 ```mko
 fn main() {
@@ -257,24 +273,19 @@ fn main() {
 }
 ```
 
-**Channel select** — multiplex across channels with a timeout:
+**Concurrent hashmap** — thread-safe, lock-free reads:
 
 ```mko
-fn sender(ch: chan[int], v: int) -> int {
-    sleep_ms(30)
-    let _ = ch.send(v)
-    return 0
-}
-
 fn main() {
-    let a = chan_new(2)
-    let b = chan_new(2)
+    let m = cmap_new()
     crew t {
-        let _ = t.kick(sender(a, 11))
-        let _ = t.kick(sender(b, 22))
-        let which = chan_select2(a, b, 500)
-        print_int(chan_select_value())
+        let _ = t.kick(fn() -> int {
+            cmap_set(m, "hits", "0")
+            cmap_incr(m, "hits", 100)
+            return 0
+        })
     }
+    print(cmap_get(m, "hits"))
 }
 ```
 
@@ -296,6 +307,54 @@ fn main() {
         let _ = Session_send(session, Session_Bye())
         print_int(loopj.join())
     }
+}
+```
+
+**Channel select** — multiplex across channels with a timeout:
+
+```mko
+fn sender(ch: chan[int], v: int) -> int {
+    sleep_ms(30)
+    let _ = ch.send(v)
+    return 0
+}
+
+fn main() {
+    let a = chan_new(2)
+    let b = chan_new(2)
+    crew t {
+        let _ = t.kick(sender(a, 11))
+        let _ = t.kick(sender(b, 22))
+        let which = chan_select2(a, b, 500)
+        print_int(chan_select_value())
+    }
+}
+```
+
+**Direct I/O and memory-mapped files** — for databases and storage engines:
+
+```mko
+fn main() {
+    let m = mmap_create("data.bin", 4096)
+    let _ = mmap_write(m, 0, "hello mmap")
+    let data = mmap_read(m, 0, 10)
+    print(data)
+    let _ = mmap_sync(m, 0)
+    let _ = mmap_close(m)
+}
+```
+
+**Binary buffers** — read and write binary protocols:
+
+```mko
+fn main() {
+    let b = buf_pack_new(64)
+    buf_write_u8(b, 0x01)
+    buf_write_u32be(b, 1024)
+    buf_write_str(b, "hello")
+    buf_seek(b, 0)
+    print_int(buf_read_u8(b))       // 1
+    print_int(buf_read_u32be(b))    // 1024
 }
 ```
 
@@ -345,60 +404,79 @@ mako pkg audit
 ## Multi-file projects
 
 Real programs outgrow a single file pretty fast. Mako makes splitting things up
-straightforward -- just `import` what you need, and `mako run` pulls everything
+straightforward — just `import` what you need, and `mako run` pulls everything
 together automatically.
 
-**Same-directory imports** -- the simplest case. Put your helpers in a separate
-file and import them:
+**Same-directory imports** — the simplest case:
 
 ```mko
-// lib.mko
-fn kv_put(key: string, val: string) -> int {
-    // ...
+// db.mko
+fn db_init() -> int {
+    // set up database connection
+    return 0
 }
 
-fn kv_get(m: map[string]string, key: string) -> string {
-    // ...
+fn db_get_user(id: int) -> string {
+    // look up user
+    return "alice"
+}
+```
+
+```mko
+// routes.mko
+fn handle_health(c: int) {
+    let _ = http_respond_json(c, 200, "{\"ok\":true}")
+}
+
+fn handle_user(c: int, id: int) {
+    let name = db_get_user(id)
+    let _ = http_respond_json(c, 200, json_object("name", name))
 }
 ```
 
 ```mko
 // main.mko
-import "./lib.mko"
+import "./db.mko"
+import "./routes.mko"
 
 fn main() {
-    let _ = kv_put("name", "mako")
+    let _ = db_init()
+    let fd = http_bind(8080)
+    while true {
+        let c = http_accept(fd)
+        let path = http_path(c)
+        if str_eq(path, "/health") {
+            handle_health(c)
+        }
+        let _ = http_close(c)
+    }
 }
 ```
 
 ```bash
-mako run main.mko     # automatically compiles lib.mko too
+mako run main.mko     # automatically compiles db.mko and routes.mko too
 ```
 
-**Aliased imports** -- give an imported file a namespace to keep things tidy:
+**Aliased imports** — give an imported file a namespace:
 
 ```mko
 import "./db.mko" as db
 import "./routes.mko" as routes
-
-fn main() {
-    db.init()
-    routes.serve(8080)
-}
 ```
 
-**Grouped imports** -- when you have several, group them in one block:
+**Grouped imports** — when you have several:
 
 ```mko
 import (
     "./routes.mko"
     "./db.mko"
     "strings"
+    "encoding/json"
 )
 ```
 
-**Package dependencies** -- for code that lives in a separate directory with its
-own `mako.toml`, declare it as a dependency and call it by name:
+**Package dependencies** — for code in a separate directory with its own
+`mako.toml`:
 
 ```toml
 # app/mako.toml
@@ -407,23 +485,18 @@ helper = { path = "../helper" }
 ```
 
 ```mko
-// app/main.mko
 fn main() {
     print_int(helper.add(1, 2))
 }
 ```
 
-**Workspaces** -- when your project grows to multiple packages, a workspace
-keeps them organized under one roof:
+**Workspaces** — multiple packages under one roof:
 
 ```toml
 # mako.toml (workspace root)
 [workspace]
 members = ["core", "helper", "app"]
 ```
-
-Each member has its own `mako.toml` and can depend on siblings. Build and test
-everything from the root with `mako check .` or `mako run -p app`.
 
 Working examples live in `examples/db_engine/` (file imports) and
 `examples/pkg_path_dep/` (workspace with package dependencies).
@@ -447,8 +520,9 @@ Working examples live in `examples/db_engine/` (file imports) and
 
 ## Editor support
 
-There's a **VS Code** extension with syntax highlighting, LSP, debugging, and
-commands for build/run/test/format. Details in [editors/vscode/](editors/vscode/).
+There's a **VS Code** extension with syntax highlighting, LSP (completions,
+hover, go-to-definition, rename), debugging via CodeLLDB, format-on-save,
+and built-in commands for build/run/test/format. See [editors/vscode/](editors/vscode/).
 
 The language server (`mako lsp`) speaks standard LSP, so it works with any
 editor that supports it.
@@ -475,6 +549,7 @@ This is 0.1.0. Some things are still in progress:
 - Struct field reflection has a schema registry but field values are still string-typed
 - SMTP AUTH works over plaintext; full AUTH over TLS is partial
 - Generics syntax is working but may see refinements
+- Direct I/O and HTTP engine are POSIX-only for now (stubs on Windows)
 
 The honest list lives in [STATUS.md](docs/STATUS.md).
 
