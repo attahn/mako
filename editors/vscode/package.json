@@ -73,15 +73,15 @@
           },
           {
             "scope": "keyword.control.flow.mako",
-            "settings": { "foreground": "#bb9af7" }
+            "settings": { "foreground": "#f7768e" }
           },
           {
             "scope": "keyword.declaration.mako",
-            "settings": { "foreground": "#7aa2f7" }
+            "settings": { "foreground": "#f7768e" }
           },
           {
             "scope": "keyword.control.concurrency.mako",
-            "settings": { "foreground": "#7dcfff", "fontStyle": "bold" }
+            "settings": { "foreground": "#f7768e", "fontStyle": "bold" }
           },
           {
             "scope": "keyword.control.memory.mako",
@@ -89,11 +89,11 @@
           },
           {
             "scope": "entity.name.function.definition.mako",
-            "settings": { "foreground": "#e0af68", "fontStyle": "bold" }
+            "settings": { "foreground": "#9ece6a", "fontStyle": "bold" }
           },
           {
             "scope": "entity.name.function.call.mako",
-            "settings": { "foreground": "#e0af68" }
+            "settings": { "foreground": "#9ece6a" }
           },
           {
             "scope": ["support.type.primitive.mako", "support.type.builtin.mako"],

@@ -56,22 +56,27 @@
       "settings": { "foreground": "#ff9e64" }
     },
     {
-      "name": "Control flow keywords — magenta/purple",
+      "name": "Control flow keywords — red",
       "scope": ["keyword.control.flow", "keyword.control.import"],
-      "settings": { "foreground": "#bb9af7" }
+      "settings": { "foreground": "#f7768e" }
     },
     {
-      "name": "Declarations — blue",
-      "scope": ["keyword.declaration", "keyword.declaration.function", "keyword.declaration.struct", "keyword.declaration.enum", "keyword.declaration.actor", "keyword.declaration.interface"],
-      "settings": { "foreground": "#7aa2f7" }
+      "name": "Declarations — red",
+      "scope": ["keyword.declaration", "keyword.declaration.struct", "keyword.declaration.enum", "keyword.declaration.actor", "keyword.declaration.interface"],
+      "settings": { "foreground": "#f7768e" }
     },
     {
-      "name": "Concurrency keywords — cyan",
+      "name": "fn keyword — red",
+      "scope": ["keyword.declaration.function"],
+      "settings": { "foreground": "#f7768e" }
+    },
+    {
+      "name": "Concurrency keywords — red",
       "scope": ["keyword.control.concurrency"],
-      "settings": { "foreground": "#7dcfff", "fontStyle": "bold" }
+      "settings": { "foreground": "#f7768e", "fontStyle": "bold" }
     },
     {
-      "name": "Memory keywords — red/coral",
+      "name": "Memory keywords — red",
       "scope": ["keyword.control.memory"],
       "settings": { "foreground": "#f7768e" }
     },
@@ -81,9 +86,9 @@
       "settings": { "foreground": "#73daca" }
     },
     {
-      "name": "Logical operators (and/or/not)",
+      "name": "Logical operators (and/or/not) — red",
       "scope": ["keyword.operator.logical"],
-      "settings": { "foreground": "#bb9af7" }
+      "settings": { "foreground": "#f7768e" }
     },
     {
       "name": "Operators — light blue",
@@ -91,14 +96,14 @@
       "settings": { "foreground": "#89ddff" }
     },
     {
-      "name": "Function definitions — bright yellow",
+      "name": "Function definitions — green bold",
       "scope": ["entity.name.function.definition"],
-      "settings": { "foreground": "#e0af68", "fontStyle": "bold" }
+      "settings": { "foreground": "#9ece6a", "fontStyle": "bold" }
     },
     {
-      "name": "Function calls — yellow",
+      "name": "Function calls — green",
       "scope": ["entity.name.function.call", "entity.name.function.method", "entity.name.function.associated"],
-      "settings": { "foreground": "#e0af68" }
+      "settings": { "foreground": "#9ece6a" }
     },
     {
       "name": "Type/struct/enum names — bright cyan",
