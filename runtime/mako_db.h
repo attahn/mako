@@ -1609,6 +1609,7 @@ static inline int64_t mako_sql_exec(MakoSqlDB db, MakoString sql, MakoIntArray a
 
 /* Execute SQL with up to 4 string parameters (for INSERT/UPDATE with text values). */
 static inline int64_t mako_sql_exec_str4(MakoSqlDB db, MakoString sql, MakoString p1, MakoString p2, MakoString p3, MakoString p4) {
+#if defined(MAKO_HAS_LIBPQ)
     if (db.driver == 2) {
         /* PostgreSQL path */
         MakoPgConn pgc = db.pg;
@@ -1621,6 +1622,9 @@ static inline int64_t mako_sql_exec_str4(MakoSqlDB db, MakoString sql, MakoStrin
         if (p4.data && p4.len > 0) { memcpy(b4, p4.data, p4.len < 4095 ? p4.len : 4095); b4[p4.len < 4095 ? p4.len : 4095] = 0; vals[np++] = b4; }
         return mako_pg_exec_params(pgc, sql, vals, np);
     }
+#else
+    (void)p1; (void)p2; (void)p3; (void)p4;
+#endif
     /* SQLite fallback — just exec without params */
     MakoIntArray empty = {NULL, 0, 0};
     return mako_sql_exec(db, sql, empty);
@@ -1634,6 +1638,7 @@ static inline int64_t mako_sql_exec_plain(MakoSqlDB db, MakoString sql) {
 
 /* Query a single string value (first column of first row). */
 static inline MakoString mako_sql_query_str(MakoSqlDB db, MakoString sql, MakoString p1) {
+#if defined(MAKO_HAS_LIBPQ)
     if (db.driver == 2) {
         MakoPgConn pgc = db.pg;
         PGconn *pg = (PGconn *)(intptr_t)pgc.handle;
@@ -1657,6 +1662,8 @@ static inline MakoString mako_sql_query_str(MakoSqlDB db, MakoString sql, MakoSt
         PQclear(r);
         return out;
     }
+#endif
+    (void)db; (void)sql; (void)p1;
     return mako_str_from_cstr("");
 }
 

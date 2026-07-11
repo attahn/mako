@@ -6,6 +6,31 @@
 
 #include "mako_rt.h"
 
+#if defined(_WIN32)
+/* Direct I/O primitives are POSIX-only for now. Stubs on Windows. */
+typedef struct { int fd; } MakoMMap;
+static inline int64_t mako_file_open(MakoString p, int64_t m, int64_t f) { (void)p;(void)m;(void)f; return -1; }
+static inline int64_t mako_file_close(int64_t fd) { (void)fd; return -1; }
+static inline MakoString mako_pread(int64_t f, int64_t c, int64_t o) { (void)f;(void)c;(void)o; return mako_str_from_cstr(""); }
+static inline int64_t mako_pwrite(int64_t f, MakoString d, int64_t o) { (void)f;(void)d;(void)o; return -1; }
+static inline int64_t mako_file_append(int64_t f, MakoString d) { (void)f;(void)d; return -1; }
+static inline int64_t mako_fsync(int64_t f) { (void)f; return -1; }
+static inline int64_t mako_fdatasync(int64_t f) { (void)f; return -1; }
+static inline int64_t mako_fallocate(int64_t f, int64_t s) { (void)f;(void)s; return -1; }
+static inline int64_t mako_file_size(int64_t f) { (void)f; return -1; }
+static inline int64_t mako_file_truncate(int64_t f, int64_t s) { (void)f;(void)s; return -1; }
+static inline int64_t mako_file_seek(int64_t f, int64_t o, int64_t w) { (void)f;(void)o;(void)w; return -1; }
+static inline MakoString mako_file_read_exact(int64_t f, int64_t n) { (void)f;(void)n; return mako_str_from_cstr(""); }
+static inline int64_t mako_file_writev(int64_t f, MakoString *p, int64_t c) { (void)f;(void)p;(void)c; return -1; }
+static inline MakoMMap *mako_mmap_open(MakoString p, int64_t m) { (void)p;(void)m; return NULL; }
+static inline MakoMMap *mako_mmap_create(MakoString p, int64_t s) { (void)p;(void)s; return NULL; }
+static inline MakoString mako_mmap_read(MakoMMap *m, int64_t o, int64_t c) { (void)m;(void)o;(void)c; return mako_str_from_cstr(""); }
+static inline int64_t mako_mmap_write(MakoMMap *m, int64_t o, MakoString d) { (void)m;(void)o;(void)d; return -1; }
+static inline int64_t mako_mmap_sync(MakoMMap *m, int64_t f) { (void)m;(void)f; return -1; }
+static inline int64_t mako_mmap_size(MakoMMap *m) { (void)m; return -1; }
+static inline int64_t mako_mmap_close(MakoMMap *m) { (void)m; return -1; }
+#else /* POSIX */
+
 /* macOS fcntl constants — use raw values to avoid _DARWIN_C_SOURCE ordering issues */
 #if defined(__APPLE__)
 #ifndef F_NOCACHE
@@ -332,5 +357,7 @@ static inline MakoString mako_file_read_exact(int64_t fd, int64_t count) {
     buf[total] = 0;
     return (MakoString){buf, total};
 }
+
+#endif /* !_WIN32 (POSIX) */
 
 #endif /* MAKO_DIO_H */

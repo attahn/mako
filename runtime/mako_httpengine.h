@@ -7,6 +7,17 @@
 #include "mako_rt.h"
 #include <string.h>
 #include <stdlib.h>
+
+#if defined(_WIN32)
+/* HTTP Engine is POSIX-only for now (uses kqueue/epoll + writev). */
+typedef struct { int dummy; } MakoHttpEngine;
+static inline MakoHttpEngine *mako_httpengine_new(void) { return NULL; }
+static inline int64_t mako_httpengine_route(MakoHttpEngine *e, MakoString m, MakoString p, int64_t h) { (void)e;(void)m;(void)p;(void)h; return -1; }
+static inline int64_t mako_httpengine_start(MakoHttpEngine *e, int64_t p) { (void)e;(void)p; return -1; }
+static inline void mako_httpengine_stop(MakoHttpEngine *e) { (void)e; }
+static inline void mako_httpengine_free(MakoHttpEngine *e) { (void)e; }
+#else /* POSIX */
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -282,5 +293,7 @@ static inline int64_t mako_httpengine_serve(MakoHttpEngine *e) {
     heng_worker_run(&main_w);
     return 0;
 }
+
+#endif /* !_WIN32 (POSIX) */
 
 #endif /* MAKO_HTTPENGINE_H */
