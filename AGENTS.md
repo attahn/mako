@@ -51,6 +51,23 @@ It is a **unique language** with **unique syntax**. That is non-negotiable.
 6. Dual forms only for migration; preferred forms stay in [docs/IDENTITY.md](docs/IDENTITY.md).
 7. Pitch **what Mako does** (speed, crew, fan) — not “like Go/Rust.”
 
+### Always update the docs
+
+**Every behavior or surface change ships with matching docs in the same change.**  
+Do not leave documentation for a follow-up. Update all of these that apply:
+
+| Surface | Where |
+|---------|--------|
+| Builtins / signatures | [docs/BUILTINS.md](docs/BUILTINS.md) |
+| Stdlib overview | [docs/STDLIB.md](docs/STDLIB.md) |
+| Guide / book chapters | [docs/GUIDE.md](docs/GUIDE.md) · [docs/book/](docs/book/) |
+| Status / roadmap | [docs/STATUS.md](docs/STATUS.md) · [docs/ROADMAP.md](docs/ROADMAP.md) when milestones move |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) — user-visible notes |
+| Language / identity | [LANGUAGE_SPEC.md](LANGUAGE_SPEC.md) · [docs/IDENTITY.md](docs/IDENTITY.md) when syntax changes |
+| Examples | Prefer a small `examples/` or `examples/testing/` sample that matches the docs |
+
+Edge cases, failure modes, and hot-path constraints belong in the docs — not only in tests.
+
 ### Always check your work
 
 Before calling a change done, **re-run and report evidence** (do not claim PASS from intent):
@@ -60,6 +77,7 @@ Before calling a change done, **re-run and report evidence** (do not claim PASS 
 3. **Demos** — `mako run` for examples you touched
 4. **Speed** — if concurrency/runtime/codegen changed: `./scripts/bench-gate.sh` (and `1.5` when relevant)
 5. **Identity** — preferred surface should stay clean under `mako lint --identity` on Mako-native samples
+6. **Docs** — tables/examples match the new surface (see above)
 
 ### Source of truth
 
