@@ -32,8 +32,14 @@ Book: [§11 Speed & memory safety](book/src/ch11-speed-safety.md) · Release how
 # CI-style gate (fib/slice/map vs Rust; default max 2.0×):
 ./scripts/bench-gate.sh
 ./scripts/bench-gate.sh 1.5   # stricter
+# Each kernel uses the median of 3 process runs; increase with MAKO_BENCH_RUNS=5.
 # GitHub Actions: job "Bench gate vs Rust" on ubuntu-latest
 ```
+
+The gate uses independent process runs and compares medians to reduce false
+regressions from scheduler or host-frequency noise. It still measures only the
+three documented kernels; it is evidence for the release hot-path bar, not a
+universal claim about every workload.
 
 **IDs on the hot path:** `Uuid` / ULID are **16-byte Copy POD** (stack, no GC).
 Prefer `uuid_v7` / `ulid_new` for time-ordered keys; format to string only at

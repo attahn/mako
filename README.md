@@ -17,7 +17,8 @@ compile-time rejection of unsynchronized mutable closure captures at every
 `kick` boundary. `fan` mappers must be capture-free; explicit Sync handles are
 the safe shared-state escape hatch. Plus everything from 0.2.0:
 generics, `mut self`, stdlib in Mako, speed optimizations.  
-**Next (roadmap):** **0.2.2** — tooling (LSP, debugger, package registry).
+**Next (roadmap):** **0.2.2** — remaining tooling (debugger, package registry,
+dependency solver); the LSP navigation/refactoring slice is now implemented.
 
 [mako-lang.com](https://mako-lang.com) · [Status](docs/STATUS.md) · [Roadmap](docs/ROADMAP.md) · [Guide](docs/GUIDE.md) · [Book](docs/book/)
 

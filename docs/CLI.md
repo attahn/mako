@@ -346,10 +346,11 @@ Start the language server (stdio JSON-RPC).
 mako lsp
 ```
 
-Supports diagnostics, hover, completion, go-to-definition, document symbols,
-workspace symbols, signature help, and reference/rename operations for the
-implemented same-file and imported-function paths. Broader project-wide
-language analysis remains a roadmap item.
+Supports diagnostics, hover, completion, go-to-definition, document/workspace
+symbols, import-graph references, project-wide function/struct rename,
+workspace signature help, and conservative inferred-type inlay hints. Rename
+is limited to top-level functions and structs and deliberately skips shadowed
+locals; inlay hints are emitted only when the type is confidently inferred.
 
 Configure your editor to run `mako lsp` as the language server for `.mko` files.
 

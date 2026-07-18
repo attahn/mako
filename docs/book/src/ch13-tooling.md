@@ -430,14 +430,20 @@ mako lsp                             # start LSP server on stdin/stdout
 | Feature              | Status    |
 |----------------------|-----------|
 | Diagnostics          | Live errors and warnings on save |
-| Hover                | Type information and doc comments |
+| Hover                | Top-level function signatures and struct names |
 | Completion           | Identifiers, keywords, builtins |
 | Go to Definition     | Jump to function/struct/enum source |
 | Find References      | All usages of a symbol |
 | Rename               | Rename a symbol across files |
 | Code Actions         | Quick fixes for common issues |
 | Document Symbols     | Outline of functions/structs/enums |
-| Signature Help       | Parameter hints while typing |
+| Signature Help       | Workspace-aware parameter hints while typing |
+| Inlay Hints          | Confident inferred local types |
+
+References and rename follow the loaded import graph. Rename is deliberately
+conservative: it operates on top-level functions and structs and skips a
+function body when a local binding shadows the target name. Inlay hints are
+omitted when the compiler-facing type cannot be inferred confidently.
 
 ### VS Code Integration
 

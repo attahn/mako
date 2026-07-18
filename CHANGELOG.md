@@ -15,6 +15,12 @@
   explicit portability fallbacks for unsupported POSIX process APIs.
 - **Stdlib surface gate** — all 71 checked-in stdlib package files are
   type-checked in the claims gate; fixed stale `slog` and boolean-print wrappers.
+- **LSP tooling depth** — definitions, references, and rename now follow the
+  loaded import graph; rename skips shadowed locals, signature help includes
+  parameter metadata, and `textDocument/inlayHint` reports confident inferred
+  local types.
+- **Stable speed evidence** — the Rust comparison gate now compares medians
+  across independent runs; `MAKO_BENCH_RUNS` can increase the sample count.
 
 - **Multi-statement lambda bodies** — lambdas can now contain `let` bindings,
   assignments, `if`/`else`, `while` loops, and nested control flow. Previously

@@ -15,7 +15,7 @@
 | **0.1.10** | Deepen generics + speed | **Shipped** |
 | **0.2.0** | Stdlib written in Mako | **Shipped** |
 | **0.2.1** | Safety & correctness | **Shipped** |
-| **0.2.2** | Tooling | Planned |
+| **0.2.2** | Tooling | In progress |
 | **0.3.0** | Cross-platform | Planned |
 | **0.4.0** | Performance ceiling | Planned |
 | **1.0** | Stability | Planned |
@@ -121,10 +121,10 @@ Developer-experience hardening.
 
 | Feature | Description |
 |---------|-------------|
-| **LSP: find-all-references** | Across files, respecting imports |
-| **LSP: rename refactoring** | Safe symbol rename across the project |
-| **LSP: signature help** | Parameter hints as you type function calls |
-| **LSP: inlay hints** | Show inferred types inline |
+| **LSP: find-all-references** | Done — import-graph references include declarations and skip shadowed locals |
+| **LSP: rename refactoring** | Done — conservative workspace edits for top-level functions/structs |
+| **LSP: signature help** | Done — workspace function signatures with parameter metadata |
+| **LSP: inlay hints** | Done — confident literal, binding, struct, and known-return types |
 | **Debugger** | Source-level breakpoints in `.mko` files, step through Mako lines, inspect variables |
 | **Package registry** | `mako publish` / `mako install` from a central registry |
 | **Dependency solver** | Version conflict resolution with integrity hashes |

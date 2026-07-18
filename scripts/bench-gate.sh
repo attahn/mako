@@ -6,6 +6,7 @@
 #   ./scripts/bench-gate.sh           # default max 2.0×
 #   ./scripts/bench-gate.sh 1.5       # strict (CI stretch goal)
 #   MAKO_BENCH_STRICT=1 ./scripts/bench-gate.sh  # same as 1.5
+#   MAKO_BENCH_RUNS=5 ./scripts/bench-gate.sh    # increase samples
 # Checks fib30x5, slice100k, map50k.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,6 +17,11 @@ elif [[ "${MAKO_BENCH_STRICT:-}" == "1" ]]; then
   MAX_RATIO="1.5"
 else
   MAX_RATIO="2.0"
+fi
+RUNS="${MAKO_BENCH_RUNS:-3}"
+if [[ ! "$RUNS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "bench-gate: MAKO_BENCH_RUNS must be a positive integer" >&2
+  exit 1
 fi
 
 if ! command -v rustc >/dev/null 2>&1; then
@@ -34,13 +40,21 @@ mkdir -p out
 rustc -C opt-level=3 -C lto -C codegen-units=1 \
   examples/bench/micro_rs.rs -o out/bench_micro_rs_gate 2>/dev/null
 
-mako_out="$(./out/bench_micro_gate)"
-rust_out="$(./out/bench_micro_rs_gate)"
+run_bench() {
+  local bin="$1"
+  local run
+  for ((run = 0; run < RUNS; run++)); do
+    "$bin"
+  done
+}
+
+mako_out="$(run_bench ./out/bench_micro_gate)"
+rust_out="$(run_bench ./out/bench_micro_rs_gate)"
 
 extract_ns() {
   local out="$1" key="$2"
   echo "$out" | awk -v k="$key" '
-    $0==k { getline; getline; print; exit }
+    $0==k { getline; getline; print }
   '
 }
 
@@ -53,14 +67,23 @@ for key in fib30x5 slice100k map50k; do
     fail=1
     continue
   fi
-  python3 - "$key" "$m" "$r" "$MAX_RATIO" <<'PY' || fail=1
+  python3 - "$key" "$MAX_RATIO" "$m" "$r" <<'PY' || fail=1
+import statistics
 import sys
-key, mako, rust, max_r = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4])
+
+key, max_r = sys.argv[1], float(sys.argv[2])
+mako_samples = [float(v) for v in sys.argv[3].split()]
+rust_samples = [float(v) for v in sys.argv[4].split()]
+if not mako_samples or not rust_samples or len(mako_samples) != len(rust_samples):
+    print(f"bench-gate {key}: invalid sample count")
+    sys.exit(1)
+mako = statistics.median(mako_samples)
+rust = statistics.median(rust_samples)
 if rust <= 0:
-    print(f"bench-gate {key}: invalid rust ns {rust}")
+    print(f"bench-gate {key}: invalid rust median ns {rust}")
     sys.exit(1)
 ratio = mako / rust
-print(f"bench-gate {key}: mako={mako:.0f}ns rust={rust:.0f}ns ratio={ratio:.2f}x (max {max_r}x)")
+print(f"bench-gate {key}: mako={mako:.0f}ns rust={rust:.0f}ns ratio={ratio:.2f}x (median of {len(mako_samples)} runs; max {max_r}x)")
 if ratio > max_r:
     print(f"FAIL: {key} — Mako is {ratio:.2f}x slower than Rust (limit {max_r}x)")
     sys.exit(1)

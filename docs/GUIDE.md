@@ -2289,7 +2289,10 @@ mako deploy plugin my-plugin --name my-plugin --kind native
 VS Code support under `editors/vscode/` includes syntax highlighting, snippets,
 tasks, command palette actions, `mako-native` debug launch configs, and a
 dependency-free client for `mako lsp` covering diagnostics, hover, completion,
-definitions, references, rename, code actions, symbols, and signature help.
+definitions, references, rename, code actions, symbols, signature help, and
+inferred-type inlay hints. References and rename follow the loaded import graph;
+rename is conservative around shadowed locals and only changes top-level
+functions and structs.
 Configure the executable path with `mako.path`; native debugging delegates to
 CodeLLDB (`lldb`) or Microsoft C/C++ (`cppdbg`) via `mako.debug.adapter`.
 

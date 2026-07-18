@@ -190,6 +190,7 @@ let ss = fan(["a", "b"], |x| x + "!")
 ./scripts/bench-gate.sh              # fib + slice + map vs Rust (default max 2.0×)
 ./scripts/bench-gate.sh 1.5          # strict stretch goal
 MAKO_BENCH_STRICT=1 ./scripts/bench-gate.sh
+MAKO_BENCH_RUNS=5 ./scripts/bench-gate.sh 1.5  # more samples; default is median of 3
 ./scripts/bench-vs-go-rust.sh        # full microbench table
 ```
 

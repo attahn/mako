@@ -1,13 +1,15 @@
-//! Minimal JSON-RPC language server (stdio).
-//! Supports: initialize, shutdown, exit, hover, completion (keywords), code actions,
-//! didOpen/didChange → textDocument/publishDiagnostics (lex/parse/typecheck),
-//! textDocument/definition (incl. cross-file import), textDocument/documentSymbol.
+//! JSON-RPC language server (stdio).
+//! Supports diagnostics, completion, definitions, document/workspace symbols,
+//! import-graph references and rename, workspace signature help, and inferred
+//! type inlay hints. The implementation remains intentionally conservative:
+//! only top-level functions/structs and confidently inferred local types are
+//! offered for refactoring or hints.
 
 use crate::desugar;
 use crate::lexer::{Lexer, TokenKind};
 use crate::parser::Parser;
 use crate::types::TypeChecker;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
@@ -55,6 +57,30 @@ const KEYWORDS: &[&str] = &[
     "true",
     "while",
 ];
+
+#[derive(Clone, Debug)]
+struct LspSymbol {
+    uri: String,
+    name: String,
+    kind: u32,
+    line: u32,
+    col: u32,
+    len: u32,
+    signature: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct LspImport {
+    target_uri: String,
+    alias: Option<String>,
+}
+
+#[derive(Default)]
+struct WorkspaceIndex {
+    docs: HashMap<String, String>,
+    symbols: Vec<LspSymbol>,
+    imports: HashMap<String, Vec<LspImport>>,
+}
 
 fn read_message(stdin: &mut impl BufRead) -> io::Result<Option<String>> {
     let mut content_length: Option<usize> = None;
@@ -381,38 +407,119 @@ fn collect_fn_sigs(src: &str) -> Vec<(String, String, usize)> {
     out
 }
 
-/// textDocument/signatureHelp — call-site fn label from same-file defs (Partial).
-fn signature_help(src: &str, line: u32, character: u32) -> String {
-    let Ok(tokens) = Lexer::new(src).tokenize() else {
-        return "null".into();
+fn signature_parameters(label: &str) -> Vec<String> {
+    let Some(open) = label.find('(') else {
+        return Vec::new();
     };
-    // Find token index at/before cursor
-    let mut at = 0usize;
+    let mut depth = 0i32;
+    let mut close = None;
+    for (offset, ch) in label[open..].char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    close = Some(open + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let Some(close) = close else {
+        return Vec::new();
+    };
+    let body = &label[open + 1..close];
+    let mut params = Vec::new();
+    let mut start = 0usize;
+    let mut nested = 0i32;
+    for (i, ch) in body.char_indices() {
+        match ch {
+            '[' | '(' => nested += 1,
+            ']' | ')' => nested -= 1,
+            ',' if nested == 0 => {
+                let part = body[start..i].trim();
+                if !part.is_empty() {
+                    params.push(part.to_string());
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    let last = body[start..].trim();
+    if !last.is_empty() {
+        params.push(last.to_string());
+    }
+    params
+}
+
+fn signature_json(label: &str, active_parameter: usize) -> String {
+    let params = signature_parameters(label);
+    let active = if params.is_empty() {
+        0
+    } else {
+        active_parameter.min(params.len().saturating_sub(1))
+    };
+    let parameter_json = params
+        .iter()
+        .map(|param| format!(r#"{{"label":"{}"}}"#, json_escape(param)))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        r#"{{"signatures":[{{"label":"{}","parameters":[{}]}}],"activeSignature":0,"activeParameter":{active}}}"#,
+        json_escape(label),
+        parameter_json
+    )
+}
+
+fn builtin_signature(name: &str) -> Option<&'static str> {
+    match name {
+        "print" => Some("print(s: string)"),
+        "print_int" => Some("print_int(n: int)"),
+        "assert_eq" => Some("assert_eq(a, b)"),
+        "pb_encode_simple" => Some("pb_encode_simple(name: string, id: int) -> string"),
+        "http2_headers_frame" => {
+            Some("http2_headers_frame(stream: int, block: string, flags: int) -> string")
+        }
+        _ => None,
+    }
+}
+
+fn call_context(src: &str, line: u32, character: u32) -> Option<(String, u32, u32, usize)> {
+    let Ok(tokens) = Lexer::new(src).tokenize() else {
+        return None;
+    };
+    let mut at = None;
     for (i, t) in tokens.iter().enumerate() {
         let tl = t.line.saturating_sub(1) as u32;
         let tc = t.col.saturating_sub(1) as u32;
         if tl < line || (tl == line && tc <= character) {
-            at = i;
+            at = Some(i);
         } else {
             break;
         }
     }
-    // Walk back to find open call: Ident LParen … cursor
+    let mut i = at?;
     let mut depth = 0i32;
     let mut commas = 0usize;
-    let mut fname: Option<String> = None;
-    let mut i = at;
     loop {
         match &tokens[i].kind {
             TokenKind::RParen => depth += 1,
             TokenKind::LParen => {
                 if depth == 0 {
                     if i > 0 {
-                        if let TokenKind::Ident(ref n) = tokens[i - 1].kind {
-                            fname = Some(n.clone());
+                        if let TokenKind::Ident(ref name) = tokens[i - 1].kind {
+                            let token = &tokens[i - 1];
+                            return Some((
+                                name.clone(),
+                                token.line.saturating_sub(1) as u32,
+                                token.col.saturating_sub(1) as u32,
+                                commas,
+                            ));
                         }
                     }
-                    break;
+                    return None;
                 }
                 depth -= 1;
             }
@@ -424,40 +531,28 @@ fn signature_help(src: &str, line: u32, character: u32) -> String {
         }
         i -= 1;
     }
-    let Some(name) = fname else {
+    None
+}
+
+/// textDocument/signatureHelp — resolve call signatures from the workspace index.
+fn signature_help(
+    index: &WorkspaceIndex,
+    uri: &str,
+    src: &str,
+    line: u32,
+    character: u32,
+) -> String {
+    let Some((name, name_line, name_col, active)) = call_context(src, line, character) else {
         return "null".into();
     };
-    for (n, label, _pc) in collect_fn_sigs(src) {
-        if n == name {
-            let active = commas as u32;
-            return format!(
-                r#"{{"signatures":[{{"label":"{}","parameters":[]}}],"activeSignature":0,"activeParameter":{active}}}"#,
-                json_escape(&label)
-            );
+    if let Some(symbol) = symbol_for_position(index, uri, src, name_line, name_col) {
+        if let Some(label) = symbol.signature {
+            return signature_json(&label, active);
         }
     }
-    // Builtins seed
-    let builtins: &[(&str, &str)] = &[
-        ("print", "print(s: string)"),
-        ("print_int", "print_int(n: int)"),
-        ("assert_eq", "assert_eq(a, b)"),
-        (
-            "pb_encode_simple",
-            "pb_encode_simple(name: string, id: int) -> string",
-        ),
-        (
-            "http2_headers_frame",
-            "http2_headers_frame(stream: int, block: string, flags: int) -> string",
-        ),
-    ];
-    for (n, label) in builtins {
-        if *n == name {
-            return format!(
-                r#"{{"signatures":[{{"label":"{label}","parameters":[]}}],"activeSignature":0,"activeParameter":{commas}}}"#
-            );
-        }
-    }
-    "null".into()
+    builtin_signature(&name)
+        .map(|label| signature_json(label, active))
+        .unwrap_or_else(|| "null".into())
 }
 
 /// Collect `struct Name` definitions (same shape as fn defs).
@@ -498,86 +593,33 @@ fn document_symbols(src: &str) -> String {
     format!("[{}]", items.join(","))
 }
 
-/// workspace/symbol: search open docs + sibling `.mko` beside each open file (Partial).
-fn workspace_symbols(docs: &HashMap<String, String>, query: &str) -> String {
+fn workspace_symbols_from_index(index: &WorkspaceIndex, query: &str) -> String {
     let q = query.to_ascii_lowercase();
-    let mut items = Vec::new();
-    let mut seen: HashMap<String, ()> = HashMap::new();
-
-    let mut push = |uri: &str, name: &str, kind: u32, dl: u32, dc: u32, len: u32| {
-        if !q.is_empty() && !name.to_ascii_lowercase().contains(&q) {
-            return;
-        }
-        let key = format!("{uri}::{name}::{kind}");
-        if seen.contains_key(&key) {
-            return;
-        }
-        seen.insert(key, ());
-        let end = dc + len;
-        items.push(format!(
-            r#"{{"name":"{name}","kind":{kind},"location":{{"uri":"{}","range":{{"start":{{"line":{dl},"character":{dc}}},"end":{{"line":{dl},"character":{end}}}}}}}}}"#,
-            json_escape(uri)
-        ));
-    };
-
-    for (uri, src) in docs {
-        for (name, dl, dc, len) in collect_fn_defs(src) {
-            push(uri, &name, 12, dl, dc, len);
-        }
-        for (name, dl, dc, len) in collect_struct_defs(src) {
-            push(uri, &name, 23, dl, dc, len);
-        }
-        // Sibling .mko in same directory (capped — avoid huge dirs like /tmp)
-        if let Some(path) = uri_to_path(uri) {
-            if let Some(dir) = path.parent() {
-                if let Ok(rd) = std::fs::read_dir(dir) {
-                    let mut n = 0usize;
-                    for ent in rd.flatten() {
-                        if n >= 48 {
-                            break;
-                        }
-                        let p = ent.path();
-                        if p.extension().and_then(|e| e.to_str()) != Some("mko") {
-                            continue;
-                        }
-                        n += 1;
-                        let Ok(src2) = std::fs::read_to_string(&p) else {
-                            continue;
-                        };
-                        let uri2 = format!("file://{}", p.display());
-                        for (name, dl, dc, len) in collect_fn_defs(&src2) {
-                            push(&uri2, &name, 12, dl, dc, len);
-                        }
-                        for (name, dl, dc, len) in collect_struct_defs(&src2) {
-                            push(&uri2, &name, 23, dl, dc, len);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let mut symbols = index.symbols.clone();
+    symbols.sort_by(|a, b| {
+        a.uri
+            .cmp(&b.uri)
+            .then(a.line.cmp(&b.line))
+            .then(a.name.cmp(&b.name))
+    });
+    let items = symbols
+        .into_iter()
+        .filter(|symbol| q.is_empty() || symbol.name.to_ascii_lowercase().contains(&q))
+        .map(|symbol| {
+            let end = symbol.col + symbol.len;
+            format!(
+                r#"{{"name":"{}","kind":{},"location":{{"uri":"{}","range":{{"start":{{"line":{},"character":{}}},"end":{{"line":{},"character":{}}}}}}}}}"#,
+                json_escape(&symbol.name),
+                symbol.kind,
+                json_escape(&symbol.uri),
+                symbol.line,
+                symbol.col,
+                symbol.line,
+                end
+            )
+        })
+        .collect::<Vec<_>>();
     format!("[{}]", items.join(","))
-}
-
-/// Collect identifier occurrences of `needle` as (0-based line, col, len).
-fn collect_ident_refs(src: &str, needle: &str) -> Vec<(u32, u32, u32)> {
-    if needle.is_empty() {
-        return Vec::new();
-    }
-    let Ok(tokens) = Lexer::new(src).tokenize() else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for t in tokens {
-        if let TokenKind::Ident(ref name) = t.kind {
-            if name == needle {
-                let line = t.line.saturating_sub(1) as u32;
-                let col = t.col.saturating_sub(1) as u32;
-                out.push((line, col, name.len() as u32));
-            }
-        }
-    }
-    out
 }
 
 /// Byte offset of (line, col) in src (0-based).
@@ -601,10 +643,6 @@ fn offset_at(src: &str, line: u32, character: u32) -> Option<usize> {
     None
 }
 
-fn is_fn_name(src: &str, name: &str) -> bool {
-    collect_fn_defs(src).iter().any(|(n, _, _, _)| n == name)
-}
-
 fn resolve_import_path(base: &Path, imp_path: &str) -> PathBuf {
     if Path::new(imp_path).is_absolute() {
         PathBuf::from(imp_path)
@@ -613,134 +651,531 @@ fn resolve_import_path(base: &Path, imp_path: &str) -> PathBuf {
     }
 }
 
-/// Apply same-file identifier rename; returns new source text.
-fn apply_ident_rename(src: &str, old: &str, new_name: &str) -> String {
-    let refs = collect_ident_refs(src, old);
-    let mut edits: Vec<(usize, usize, String)> = Vec::new();
-    for (dl, dc, len) in &refs {
-        let Some(start) = offset_at(src, *dl, *dc) else {
+fn path_to_uri(path: &Path) -> String {
+    let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    format!("file://{}", normalized.display())
+}
+
+fn normalize_uri(uri: &str) -> String {
+    uri_to_path(uri)
+        .map(|path| path_to_uri(&path))
+        .unwrap_or_else(|| uri.to_string())
+}
+
+fn import_default_alias(path: &str) -> Option<String> {
+    Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn source_for_uri(uri: &str, open_docs: &HashMap<String, String>) -> Option<String> {
+    if let Some(src) = open_docs.get(uri) {
+        return Some(src.clone());
+    }
+    let normalized = normalize_uri(uri);
+    if let Some(src) = open_docs.get(&normalized) {
+        return Some(src.clone());
+    }
+    uri_to_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+}
+
+fn build_workspace_index(open_docs: &HashMap<String, String>) -> WorkspaceIndex {
+    let mut index = WorkspaceIndex::default();
+    let normalized_docs: HashMap<String, String> = open_docs
+        .iter()
+        .map(|(uri, src)| (normalize_uri(uri), src.clone()))
+        .collect();
+    let mut pending: Vec<String> = normalized_docs.keys().cloned().collect();
+    let mut queued: HashSet<String> = pending.iter().cloned().collect();
+
+    while let Some(uri) = pending.pop() {
+        if index.docs.contains_key(&uri) {
+            continue;
+        }
+        let Some(src) = source_for_uri(&uri, &normalized_docs) else {
             continue;
         };
-        edits.push((start, start + *len as usize, new_name.to_string()));
+        let imports = if let Some(path) = uri_to_path(&uri) {
+            let base = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+            collect_imports(&src)
+                .into_iter()
+                .map(|(imp_path, alias)| {
+                    let target = resolve_import_path(&base, &imp_path);
+                    let target_uri = path_to_uri(&target);
+                    if queued.insert(target_uri.clone()) {
+                        pending.push(target_uri.clone());
+                    }
+                    LspImport { target_uri, alias }
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        index.imports.insert(uri.clone(), imports);
+        index.docs.insert(uri.clone(), src.clone());
+
+        let sigs = collect_fn_sigs(&src);
+        for (name, line, col, len) in collect_fn_defs(&src) {
+            let signature = sigs
+                .iter()
+                .find(|(sig_name, _, _)| sig_name == &name)
+                .map(|(_, label, _)| label.clone());
+            index.symbols.push(LspSymbol {
+                uri: uri.clone(),
+                name,
+                kind: 12,
+                line,
+                col,
+                len,
+                signature,
+            });
+        }
+        for (name, line, col, len) in collect_struct_defs(&src) {
+            index.symbols.push(LspSymbol {
+                uri: uri.clone(),
+                name,
+                kind: 23,
+                line,
+                col,
+                len,
+                signature: None,
+            });
+        }
+    }
+    index
+}
+
+fn import_reaches(index: &WorkspaceIndex, from: &str, wanted: &str) -> bool {
+    if from == wanted {
+        return true;
+    }
+    let mut seen = HashSet::new();
+    let mut stack = vec![from.to_string()];
+    while let Some(uri) = stack.pop() {
+        if !seen.insert(uri.clone()) {
+            continue;
+        }
+        for edge in index.imports.get(&uri).into_iter().flatten() {
+            if edge.target_uri == wanted {
+                return true;
+            }
+            stack.push(edge.target_uri.clone());
+        }
+    }
+    false
+}
+
+fn qualifier_at(src: &str, line: u32, character: u32) -> Option<String> {
+    let line_text = src.lines().nth(line as usize)?;
+    let word_end = character as usize;
+    if word_end > line_text.len() {
+        return None;
+    }
+    let mut start = word_end;
+    while start > 0 && line_text.as_bytes()[start - 1].is_ascii_alphanumeric()
+        || start > 0 && line_text.as_bytes()[start - 1] == b'_'
+    {
+        start -= 1;
+    }
+    let before = line_text[..start].trim_end();
+    if !before.ends_with('.') {
+        return None;
+    }
+    let before_dot = before[..before.len() - 1].trim_end();
+    let mut qstart = before_dot.len();
+    while qstart > 0
+        && (before_dot.as_bytes()[qstart - 1].is_ascii_alphanumeric()
+            || before_dot.as_bytes()[qstart - 1] == b'_')
+    {
+        qstart -= 1;
+    }
+    let qualifier = &before_dot[qstart..];
+    (!qualifier.is_empty()).then(|| qualifier.to_string())
+}
+
+fn symbol_for_position(
+    index: &WorkspaceIndex,
+    uri: &str,
+    src: &str,
+    line: u32,
+    character: u32,
+) -> Option<LspSymbol> {
+    let uri = normalize_uri(uri);
+    let word = word_at(src, line, character);
+    if word.is_empty() {
+        return None;
+    }
+    let qualifier = qualifier_at(src, line, character);
+    if qualifier.is_none()
+        && offset_at(src, line, character)
+            .is_some_and(|offset| offset_in_ranges(offset, &function_shadow_ranges(src, &word)))
+    {
+        return None;
+    }
+    let local = index
+        .symbols
+        .iter()
+        .find(|s| s.uri == uri && s.name == word)
+        .cloned();
+    if qualifier.is_none() {
+        if local.is_some() {
+            return local;
+        }
+    }
+
+    let mut candidates = index
+        .symbols
+        .iter()
+        .filter(|s| s.name == word && s.uri != uri)
+        .filter(|s| import_reaches(index, &uri, &s.uri));
+    if let Some(q) = qualifier {
+        return candidates
+            .find(|candidate| {
+                let mut stack = vec![(uri.to_string(), q.clone())];
+                let mut seen = HashSet::new();
+                while let Some((from, alias)) = stack.pop() {
+                    if !seen.insert((from.clone(), alias.clone())) {
+                        continue;
+                    }
+                    for edge in index.imports.get(&from).into_iter().flatten() {
+                        let edge_alias = edge
+                            .alias
+                            .clone()
+                            .or_else(|| import_default_alias(&edge.target_uri));
+                        if edge_alias.as_deref() != Some(alias.as_str()) {
+                            continue;
+                        }
+                        if edge.target_uri == candidate.uri {
+                            return true;
+                        }
+                        stack.push((edge.target_uri.clone(), alias.clone()));
+                    }
+                }
+                false
+            })
+            .cloned();
+    }
+    candidates.next().cloned().or(local)
+}
+
+fn token_offset(src: &str, token: &crate::lexer::Token) -> Option<usize> {
+    offset_at(
+        src,
+        token.line.saturating_sub(1) as u32,
+        token.col.saturating_sub(1) as u32,
+    )
+}
+
+fn function_shadow_ranges(src: &str, needle: &str) -> Vec<(usize, usize)> {
+    let Ok(tokens) = Lexer::new(src).tokenize() else {
+        return Vec::new();
+    };
+    let mut ranges = Vec::new();
+    let mut i = 0usize;
+    while i < tokens.len() {
+        if !matches!(tokens[i].kind, TokenKind::Fn | TokenKind::Func) {
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        while j < tokens.len() && !matches!(tokens[j].kind, TokenKind::LParen | TokenKind::LBrace) {
+            j += 1;
+        }
+        let mut shadowed = false;
+        if j < tokens.len() && matches!(tokens[j].kind, TokenKind::LParen) {
+            let mut depth = 1i32;
+            let mut k = j + 1;
+            while k < tokens.len() && depth > 0 {
+                match tokens[k].kind {
+                    TokenKind::LParen => depth += 1,
+                    TokenKind::RParen => depth -= 1,
+                    TokenKind::Ident(ref name) if depth == 1 && name == needle => {
+                        shadowed = true;
+                    }
+                    _ => {}
+                }
+                k += 1;
+            }
+            j = k;
+        }
+        while j < tokens.len() && !matches!(tokens[j].kind, TokenKind::LBrace) {
+            j += 1;
+        }
+        if j >= tokens.len() {
+            break;
+        }
+        let open = j;
+        let mut depth = 1i32;
+        j += 1;
+        while j < tokens.len() && depth > 0 {
+            match tokens[j].kind {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => depth -= 1,
+                TokenKind::Let | TokenKind::Var | TokenKind::Const => {
+                    if let Some(TokenKind::Ident(name)) = tokens.get(j + 1).map(|t| &t.kind) {
+                        if name == needle {
+                            shadowed = true;
+                        }
+                    }
+                }
+                TokenKind::For => {
+                    let mut k = j + 1;
+                    while k < tokens.len()
+                        && !matches!(tokens[k].kind, TokenKind::In | TokenKind::LBrace)
+                    {
+                        if let TokenKind::Ident(name) = &tokens[k].kind {
+                            if name == needle {
+                                shadowed = true;
+                            }
+                        }
+                        k += 1;
+                    }
+                }
+                _ => {}
+            }
+            j += 1;
+        }
+        if shadowed {
+            if let (Some(start), Some(end)) = (
+                token_offset(src, &tokens[open]),
+                tokens
+                    .get(j.saturating_sub(1))
+                    .and_then(|t| token_offset(src, t)),
+            ) {
+                ranges.push((start, end));
+            }
+        }
+        i = j;
+    }
+    ranges
+}
+
+fn offset_in_ranges(offset: usize, ranges: &[(usize, usize)]) -> bool {
+    ranges
+        .iter()
+        .any(|(start, end)| offset >= *start && offset <= *end)
+}
+
+fn collect_symbol_occurrences(src: &str, name: &str, kind: u32) -> Vec<(u32, u32, u32)> {
+    let Ok(tokens) = Lexer::new(src).tokenize() else {
+        return Vec::new();
+    };
+    let shadowed = function_shadow_ranges(src, name);
+    let mut out = Vec::new();
+    for (i, token) in tokens.iter().enumerate() {
+        if !matches!(&token.kind, TokenKind::Ident(found) if found == name) {
+            continue;
+        }
+        let Some(offset) = token_offset(src, token) else {
+            continue;
+        };
+        if offset_in_ranges(offset, &shadowed) {
+            continue;
+        }
+        let previous = i.checked_sub(1).and_then(|n| tokens.get(n));
+        let next = tokens.get(i + 1);
+        let is_definition = previous.is_some_and(|t| {
+            matches!(
+                t.kind,
+                TokenKind::Fn | TokenKind::Func if kind == 12
+            ) || matches!(t.kind, TokenKind::Struct if kind == 23)
+        });
+        let is_reference = if kind == 12 {
+            next.is_some_and(|t| matches!(t.kind, TokenKind::LParen))
+                || previous.is_some_and(|t| matches!(t.kind, TokenKind::Dot))
+                || previous.is_some_and(|t| {
+                    matches!(
+                        t.kind,
+                        TokenKind::Assign
+                            | TokenKind::Comma
+                            | TokenKind::Return
+                            | TokenKind::LParen
+                    )
+                })
+        } else {
+            next.is_some_and(|t| matches!(t.kind, TokenKind::LBrace | TokenKind::LBracket))
+                || previous.is_some_and(|t| {
+                    matches!(
+                        t.kind,
+                        TokenKind::Colon | TokenKind::Comma | TokenKind::LBracket
+                    )
+                })
+        };
+        if is_definition || is_reference {
+            out.push((
+                token.line.saturating_sub(1) as u32,
+                token.col.saturating_sub(1) as u32,
+                name.len() as u32,
+            ));
+        }
+    }
+    out
+}
+
+fn occurrence_matches_import(
+    index: &WorkspaceIndex,
+    from_uri: &str,
+    target_uri: &str,
+    src: &str,
+    line: u32,
+    col: u32,
+) -> bool {
+    if from_uri == target_uri {
+        return true;
+    }
+    let qualifier = qualifier_at(src, line, col + 1);
+    if let Some(q) = qualifier {
+        let mut stack = vec![(from_uri.to_string(), q)];
+        let mut seen = HashSet::new();
+        while let Some((uri, alias)) = stack.pop() {
+            if !seen.insert((uri.clone(), alias.clone())) {
+                continue;
+            }
+            for edge in index.imports.get(&uri).into_iter().flatten() {
+                let edge_alias = edge
+                    .alias
+                    .clone()
+                    .or_else(|| import_default_alias(&edge.target_uri));
+                if edge_alias.as_deref() != Some(alias.as_str()) {
+                    continue;
+                }
+                if edge.target_uri == target_uri {
+                    return true;
+                }
+                stack.push((edge.target_uri.clone(), alias.clone()));
+            }
+        }
+        false
+    } else {
+        import_reaches(index, from_uri, target_uri)
+    }
+}
+
+fn symbol_locations(index: &WorkspaceIndex, symbol: &LspSymbol) -> Vec<(String, u32, u32, u32)> {
+    let mut locations = Vec::new();
+    for (uri, src) in &index.docs {
+        if !import_reaches(index, uri, &symbol.uri) {
+            continue;
+        }
+        for (line, col, len) in collect_symbol_occurrences(src, &symbol.name, symbol.kind) {
+            if uri != &symbol.uri
+                && !occurrence_matches_import(index, uri, &symbol.uri, src, line, col)
+            {
+                continue;
+            }
+            locations.push((uri.clone(), line, col, len));
+        }
+    }
+    locations
+}
+
+fn apply_occurrence_rename(src: &str, occurrences: &[(u32, u32, u32)], new_name: &str) -> String {
+    let mut edits = Vec::new();
+    for (line, col, len) in occurrences {
+        if let Some(start) = offset_at(src, *line, *col) {
+            edits.push((start, start + *len as usize));
+        }
     }
     edits.sort_by(|a, b| b.0.cmp(&a.0));
-    let mut new_src = src.to_string();
-    for (start, end, rep) in edits {
-        new_src.replace_range(start..end, &rep);
+    let mut out = src.to_string();
+    for (start, end) in edits {
+        out.replace_range(start..end, new_name);
     }
-    new_src
+    out
+}
+
+fn full_doc_end(old_src: &str) -> (u32, u32) {
+    let line = old_src.bytes().filter(|byte| *byte == b'\n').count() as u32;
+    let character = old_src
+        .rsplit('\n')
+        .next()
+        .map(|last_line| last_line.chars().count() as u32)
+        .unwrap_or(0);
+    (line, character)
 }
 
 fn full_doc_edit(uri: &str, old_src: &str, new_src: &str) -> String {
+    let (end_line, end_character) = full_doc_end(old_src);
     format!(
-        r#"{{"{}":[{{"range":{{"start":{{"line":0,"character":0}},"end":{{"line":{},"character":0}}}},"newText":"{}"}}]}}"#,
+        r#"{{"{}":[{{"range":{{"start":{{"line":0,"character":0}},"end":{{"line":{},"character":{}}}}},"newText":"{}"}}]}}"#,
         json_escape(uri),
-        old_src.lines().count(),
+        end_line,
+        end_character,
         json_escape(new_src)
     )
 }
 
-/// textDocument/prepareRename — same-file `fn` or imported fn name under cursor.
-fn prepare_rename(uri: &str, src: &str, line: u32, character: u32) -> String {
-    let word = word_at(src, line, character);
-    if word.is_empty() {
+/// textDocument/prepareRename — resolve a top-level symbol across the import graph.
+fn prepare_rename(
+    index: &WorkspaceIndex,
+    uri: &str,
+    src: &str,
+    line: u32,
+    character: u32,
+) -> String {
+    let uri = normalize_uri(uri);
+    let Some(symbol) = symbol_for_position(index, &uri, src, line, character) else {
         return "null".into();
-    }
-    let local = is_fn_name(src, &word);
-    let mut imported = false;
-    if !local {
-        if let Some(path) = uri_to_path(uri) {
-            let base = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-            for (imp_path, _) in collect_imports(src) {
-                let target = resolve_import_path(&base, &imp_path);
-                let Ok(imp_src) = std::fs::read_to_string(&target) else {
-                    continue;
-                };
-                if is_fn_name(&imp_src, &word) {
-                    imported = true;
-                    break;
-                }
-            }
-        }
-    }
-    if !local && !imported {
-        return "null".into();
-    }
-    for (dl, dc, len) in collect_ident_refs(src, &word) {
-        if dl == line && character >= dc && character <= dc + len {
+    };
+    for (loc_uri, dl, dc, len) in symbol_locations(index, &symbol) {
+        if loc_uri == uri && dl == line && character >= dc && character <= dc + len {
             return format!(
                 r#"{{"range":{{"start":{{"line":{dl},"character":{dc}}},"end":{{"line":{dl},"character":{}}}}},"placeholder":"{}"}}"#,
                 dc + len,
-                json_escape(&word)
+                json_escape(&symbol.name)
             );
-        }
-    }
-    if local {
-        for (name, dl, dc, len) in collect_fn_defs(src) {
-            if name == word {
-                return format!(
-                    r#"{{"range":{{"start":{{"line":{dl},"character":{dc}}},"end":{{"line":{dl},"character":{}}}}},"placeholder":"{}"}}"#,
-                    dc + len,
-                    json_escape(&word)
-                );
-            }
         }
     }
     "null".into()
 }
 
-/// textDocument/rename — same-file + imported definition files (Partial).
-fn rename_symbol(uri: &str, src: &str, line: u32, character: u32, new_name: &str) -> String {
-    let word = word_at(src, line, character);
-    if word.is_empty() || new_name.is_empty() {
-        return "null".into();
-    }
-    if !new_name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        || new_name.chars().next().is_some_and(|c| c.is_ascii_digit())
-    {
-        return "null".into();
-    }
-    let local = is_fn_name(src, &word);
-    let mut change_parts: Vec<String> = Vec::new();
+fn valid_rename_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && name.chars().next().is_some_and(|c| !c.is_ascii_digit())
+        && !KEYWORDS.contains(&name)
+}
 
-    if local {
-        let new_src = apply_ident_rename(src, &word, new_name);
-        change_parts.push(full_doc_edit(uri, src, &new_src));
-        // Also update importers that pull this file? skip — rename from def site only updates this file
-    } else {
-        // Imported fn: rename in current file + defining import file(s)
-        let new_src = apply_ident_rename(src, &word, new_name);
-        change_parts.push(full_doc_edit(uri, src, &new_src));
-        if let Some(path) = uri_to_path(uri) {
-            let base = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-            for (imp_path, _) in collect_imports(src) {
-                let target = resolve_import_path(&base, &imp_path);
-                let Ok(imp_src) = std::fs::read_to_string(&target) else {
-                    continue;
-                };
-                if !is_fn_name(&imp_src, &word) {
-                    continue;
-                }
-                let target_uri = format!("file://{}", target.display());
-                let new_imp = apply_ident_rename(&imp_src, &word, new_name);
-                change_parts.push(full_doc_edit(&target_uri, &imp_src, &new_imp));
-            }
-        }
-        if change_parts.len() < 2 {
-            // no defining file found — still allow current-file-only if refs exist
-            if collect_ident_refs(src, &word).is_empty() {
-                return "null".into();
-            }
-        }
+/// textDocument/rename — safe workspace edit for a top-level function or struct.
+fn rename_symbol(
+    index: &WorkspaceIndex,
+    uri: &str,
+    src: &str,
+    line: u32,
+    character: u32,
+    new_name: &str,
+) -> String {
+    let uri = normalize_uri(uri);
+    if !valid_rename_name(new_name) {
+        return "null".into();
+    }
+    let Some(symbol) = symbol_for_position(index, &uri, src, line, character) else {
+        return "null".into();
+    };
+    let locations = symbol_locations(index, &symbol);
+    if !locations.iter().any(|(loc_uri, dl, dc, len)| {
+        *loc_uri == uri && *dl == line && character >= *dc && character <= *dc + *len
+    }) {
+        return "null".into();
     }
 
-    if change_parts.is_empty() {
-        return "null".into();
+    let mut by_uri: HashMap<String, Vec<(u32, u32, u32)>> = HashMap::new();
+    for (loc_uri, dl, dc, len) in locations {
+        by_uri.entry(loc_uri).or_default().push((dl, dc, len));
     }
-    // Merge into {"changes":{ uri: [...], uri2: [...] }}
-    let inner = change_parts
+    let mut edits = Vec::new();
+    let mut uris: Vec<String> = by_uri.keys().cloned().collect();
+    uris.sort();
+    for loc_uri in uris {
+        let Some(old_src) = index.docs.get(&loc_uri) else {
+            continue;
+        };
+        let new_src = apply_occurrence_rename(old_src, &by_uri[&loc_uri], new_name);
+        edits.push(full_doc_edit(&loc_uri, old_src, &new_src));
+    }
+    let inner = edits
         .iter()
         .map(|p| p.trim_start_matches('{').trim_end_matches('}').to_string())
         .collect::<Vec<_>>()
@@ -748,33 +1183,23 @@ fn rename_symbol(uri: &str, src: &str, line: u32, character: u32, new_name: &str
     format!(r#"{{"changes":{{{inner}}}}}"#)
 }
 
-/// textDocument/references — same file + imported files (Partial).
-fn find_references(uri: &str, src: &str, line: u32, character: u32) -> String {
-    let word = word_at(src, line, character);
-    if word.is_empty() {
+/// textDocument/references — all reachable project references, including the declaration.
+fn find_references(
+    index: &WorkspaceIndex,
+    uri: &str,
+    src: &str,
+    line: u32,
+    character: u32,
+) -> String {
+    let Some(symbol) = symbol_for_position(index, uri, src, line, character) else {
         return "[]".into();
-    }
-    let mut locs = Vec::new();
-    for (dl, dc, len) in collect_ident_refs(src, &word) {
-        locs.push(location_json(uri, dl, dc, len));
-    }
-    if let Some(path) = uri_to_path(uri) {
-        let base = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-        for (imp_path, _) in collect_imports(src) {
-            let target = if Path::new(&imp_path).is_absolute() {
-                PathBuf::from(&imp_path)
-            } else {
-                base.join(&imp_path)
-            };
-            let Ok(imp_src) = std::fs::read_to_string(&target) else {
-                continue;
-            };
-            let target_uri = format!("file://{}", target.display());
-            for (dl, dc, len) in collect_ident_refs(&imp_src, &word) {
-                locs.push(location_json(&target_uri, dl, dc, len));
-            }
-        }
-    }
+    };
+    let mut locations = symbol_locations(index, &symbol);
+    locations.sort();
+    let locs = locations
+        .into_iter()
+        .map(|(loc_uri, dl, dc, len)| location_json(&loc_uri, dl, dc, len))
+        .collect::<Vec<_>>();
     format!("[{}]", locs.join(","))
 }
 
@@ -817,66 +1242,20 @@ fn word_at(src: &str, line: u32, character: u32) -> String {
     src[start..end].to_string()
 }
 
-fn goto_definition(uri: &str, src: &str, line: u32, character: u32) -> Option<String> {
-    let word = word_at(src, line, character);
-    if word.is_empty() {
-        return None;
-    }
-    // Same-file first
-    for (name, dl, dc, len) in collect_fn_defs(src) {
-        if name == word {
-            return Some(location_json(uri, dl, dc, len));
-        }
-    }
-    // Cross-file via import graph (and `as` aliases: lib.add → lib__add in imported file as add)
-    let path = uri_to_path(uri)?;
-    let base = path.parent()?.to_path_buf();
-    for (imp_path, alias) in collect_imports(src) {
-        let target = if Path::new(&imp_path).is_absolute() {
-            PathBuf::from(&imp_path)
-        } else {
-            base.join(&imp_path)
-        };
-        let Ok(imp_src) = std::fs::read_to_string(&target) else {
-            continue;
-        };
-        let target_uri = format!("file://{}", target.display());
-        let search = if let Some(a) = alias {
-            // `lib.add` call site word is just `add` when on method; also support `lib__add`
-            if word.starts_with(&format!("{a}__")) {
-                word[a.len() + 2..].to_string()
-            } else {
-                word.clone()
-            }
-        } else {
-            word.clone()
-        };
-        for (name, dl, dc, len) in collect_fn_defs(&imp_src) {
-            if name == search || name == word {
-                return Some(location_json(&target_uri, dl, dc, len));
-            }
-        }
-        // Nested: if imported file itself imports, one level is enough for MVP Partial;
-        // recurse one more hop for shallow graphs.
-        let nested_base = target.parent().unwrap_or(Path::new(".")).to_path_buf();
-        for (imp2, _) in collect_imports(&imp_src) {
-            let t2 = if Path::new(&imp2).is_absolute() {
-                PathBuf::from(&imp2)
-            } else {
-                nested_base.join(&imp2)
-            };
-            let Ok(src2) = std::fs::read_to_string(&t2) else {
-                continue;
-            };
-            let uri2 = format!("file://{}", t2.display());
-            for (name, dl, dc, len) in collect_fn_defs(&src2) {
-                if name == search || name == word {
-                    return Some(location_json(&uri2, dl, dc, len));
-                }
-            }
-        }
-    }
-    None
+fn goto_definition_index(
+    index: &WorkspaceIndex,
+    uri: &str,
+    src: &str,
+    line: u32,
+    character: u32,
+) -> Option<String> {
+    let symbol = symbol_for_position(index, uri, src, line, character)?;
+    Some(location_json(
+        &symbol.uri,
+        symbol.line,
+        symbol.col,
+        symbol.len,
+    ))
 }
 
 fn location_json(uri: &str, dl: u32, dc: u32, len: u32) -> String {
@@ -986,6 +1365,26 @@ fn code_actions(has_diagnostics: bool) -> String {
     format!("[{}]", actions.join(","))
 }
 
+fn hover(index: &WorkspaceIndex, uri: &str, src: &str, line: u32, character: u32) -> String {
+    let Some(symbol) = symbol_for_position(index, uri, src, line, character) else {
+        return "null".into();
+    };
+    let detail = match (&symbol.signature, symbol.kind) {
+        (Some(signature), 12) => format!("`{signature}`"),
+        (_, 23) => format!("`struct {}`", symbol.name),
+        _ => return "null".into(),
+    };
+    let value = format!("**mako**\n\n{detail}");
+    format!(
+        r#"{{"contents":{{"kind":"markdown","value":"{}"}},"range":{{"start":{{"line":{},"character":{}}},"end":{{"line":{},"character":{}}}}}}}"#,
+        json_escape(&value),
+        symbol.line,
+        symbol.col,
+        symbol.line,
+        symbol.col + symbol.len
+    )
+}
+
 fn word_prefix_at(src: &str, line: u32, character: u32) -> String {
     let mut cur_line = 0u32;
     let mut cur_col = 0u32;
@@ -1012,6 +1411,159 @@ fn word_prefix_at(src: &str, line: u32, character: u32) -> String {
         }
     }
     before[start..].to_string()
+}
+
+fn signature_return_type(label: &str) -> Option<String> {
+    label
+        .split_once("->")
+        .map(|(_, ret)| ret.trim().to_string())
+        .filter(|ret| !ret.is_empty())
+}
+
+fn function_return_type(index: &WorkspaceIndex, uri: &str, name: &str) -> Option<String> {
+    let uri = normalize_uri(uri);
+    index
+        .symbols
+        .iter()
+        .find(|symbol| {
+            symbol.kind == 12
+                && symbol.name == name
+                && (symbol.uri == uri || import_reaches(index, &uri, &symbol.uri))
+        })
+        .and_then(|symbol| symbol.signature.as_deref().and_then(signature_return_type))
+}
+
+fn infer_expression_type(
+    tokens: &[crate::lexer::Token],
+    start: usize,
+    index: &WorkspaceIndex,
+    uri: &str,
+    inferred: &HashMap<String, String>,
+) -> Option<String> {
+    let token = tokens.get(start)?;
+    match &token.kind {
+        TokenKind::Int(_) => Some("int".into()),
+        TokenKind::Float(_) => Some("float".into()),
+        TokenKind::String(_) | TokenKind::FString(_) => Some("string".into()),
+        TokenKind::True | TokenKind::False => Some("bool".into()),
+        TokenKind::Minus => match tokens.get(start + 1).map(|t| &t.kind) {
+            Some(TokenKind::Int(_)) => Some("int".into()),
+            Some(TokenKind::Float(_)) => Some("float".into()),
+            _ => None,
+        },
+        TokenKind::Ident(name) => {
+            if let Some(known) = inferred.get(name) {
+                return Some(known.clone());
+            }
+            if matches!(
+                tokens.get(start + 1).map(|t| &t.kind),
+                Some(TokenKind::LBrace)
+            ) {
+                if index
+                    .symbols
+                    .iter()
+                    .any(|s| s.kind == 23 && s.name == *name)
+                {
+                    return Some(name.clone());
+                }
+            }
+            let call_name = if matches!(
+                tokens.get(start + 1).map(|t| &t.kind),
+                Some(TokenKind::LParen)
+            ) {
+                Some(name.as_str())
+            } else if matches!(tokens.get(start + 1).map(|t| &t.kind), Some(TokenKind::Dot)) {
+                match tokens.get(start + 2).map(|t| &t.kind) {
+                    Some(TokenKind::Ident(function))
+                        if matches!(
+                            tokens.get(start + 3).map(|t| &t.kind),
+                            Some(TokenKind::LParen)
+                        ) =>
+                    {
+                        Some(function.as_str())
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            if let Some(call_name) = call_name {
+                return function_return_type(index, uri, call_name);
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn position_in_range(line: u32, character: u32, range: (u32, u32, u32, u32)) -> bool {
+    let (start_line, start_char, end_line, end_char) = range;
+    (line > start_line || (line == start_line && character >= start_char))
+        && (line < end_line || (line == end_line && character <= end_char))
+}
+
+fn inlay_hints(
+    index: &WorkspaceIndex,
+    uri: &str,
+    src: &str,
+    range: (u32, u32, u32, u32),
+) -> String {
+    let Ok(tokens) = Lexer::new(src).tokenize() else {
+        return "[]".into();
+    };
+    let mut inferred = HashMap::new();
+    let mut hints = Vec::new();
+    let mut i = 0usize;
+    while i < tokens.len() {
+        if !matches!(tokens[i].kind, TokenKind::Let | TokenKind::Var) {
+            i += 1;
+            continue;
+        }
+        let mut name_at = i + 1;
+        while matches!(
+            tokens.get(name_at).map(|t| &t.kind),
+            Some(TokenKind::Mut | TokenKind::Hold | TokenKind::Share)
+        ) {
+            name_at += 1;
+        }
+        let Some(crate::lexer::Token {
+            kind: TokenKind::Ident(name),
+            line,
+            col,
+        }) = tokens.get(name_at)
+        else {
+            i += 1;
+            continue;
+        };
+        let name = name.clone();
+        let name_line = line.saturating_sub(1) as u32;
+        let name_col = col.saturating_sub(1) as u32;
+        let Some(next) = tokens.get(name_at + 1) else {
+            i = name_at + 1;
+            continue;
+        };
+        if matches!(next.kind, TokenKind::Colon) {
+            i = name_at + 1;
+            continue;
+        }
+        if !matches!(next.kind, TokenKind::Assign) {
+            i = name_at + 1;
+            continue;
+        }
+        let Some(ty) = infer_expression_type(&tokens, name_at + 2, index, uri, &inferred) else {
+            i = name_at + 2;
+            continue;
+        };
+        inferred.insert(name.clone(), ty.clone());
+        let hint_character = name_col + name.len() as u32;
+        if position_in_range(name_line, hint_character, range) {
+            hints.push(format!(
+                r#"{{"position":{{"line":{name_line},"character":{hint_character}}},"label":": {ty}","kind":1,"paddingLeft":true}}"#
+            ));
+        }
+        i = name_at + 2;
+    }
+    format!("[{}]", hints.join(","))
 }
 
 fn parse_position(msg: &str) -> (u32, u32) {
@@ -1042,6 +1594,14 @@ fn parse_position(msg: &str) -> (u32, u32) {
         })
         .unwrap_or(0);
     (line, character)
+}
+
+fn parse_range(msg: &str) -> (u32, u32, u32, u32) {
+    let start = msg.find("\"start\"").unwrap_or(0);
+    let end = msg.find("\"end\"").unwrap_or(start);
+    let (start_line, start_char) = parse_position(&msg[start..]);
+    let (end_line, end_char) = parse_position(&msg[end..]);
+    (start_line, start_char, end_line, end_char)
 }
 
 fn extract_text_document_text(msg: &str) -> Option<String> {
@@ -1097,7 +1657,7 @@ pub fn run_stdio() -> io::Result<()> {
 
         match method {
             "initialize" => {
-                let result = r#"{"capabilities":{"hoverProvider":true,"completionProvider":{"triggerCharacters":["."]},"textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"referencesProvider":true,"codeActionProvider":true,"signatureHelpProvider":{"triggerCharacters":["(",","]},"renameProvider":{"prepareProvider":true}},"serverInfo":{"name":"mako-lsp","version":"0.4.6"}}"#;
+                let result = r#"{"capabilities":{"hoverProvider":true,"completionProvider":{"triggerCharacters":["."]},"textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"referencesProvider":true,"codeActionProvider":true,"signatureHelpProvider":{"triggerCharacters":["(",","]},"renameProvider":{"prepareProvider":true},"inlayHintProvider":{"resolveProvider":false}},"serverInfo":{"name":"mako-lsp","version":"0.5.0"}}"#;
                 let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
                 write_message(&mut stdout, &body)?;
             }
@@ -1153,7 +1713,11 @@ pub fn run_stdio() -> io::Result<()> {
                 }
             }
             "textDocument/hover" => {
-                let result = r#"{"contents":{"kind":"markdown","value":"**mako** LSP Partial\n\nDiagnostics on open/change · keyword completion · `mako check` for CLI."}}"#;
+                let uri = json_get_str(&msg, "uri").unwrap_or("");
+                let (line, character) = parse_position(&msg);
+                let src = source_for_uri(uri, &docs).unwrap_or_default();
+                let index = build_workspace_index(&docs);
+                let result = hover(&index, uri, &src, line, character);
                 let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
                 write_message(&mut stdout, &body)?;
             }
@@ -1177,8 +1741,9 @@ pub fn run_stdio() -> io::Result<()> {
             "textDocument/definition" => {
                 let uri = json_get_str(&msg, "uri").unwrap_or("");
                 let (line, character) = parse_position(&msg);
-                let src = docs.get(uri).map(|s| s.as_str()).unwrap_or("");
-                let result = match goto_definition(uri, src, line, character) {
+                let src = source_for_uri(uri, &docs).unwrap_or_default();
+                let index = build_workspace_index(&docs);
+                let result = match goto_definition_index(&index, uri, &src, line, character) {
                     Some(loc) => loc,
                     None => "null".into(),
                 };
@@ -1194,31 +1759,44 @@ pub fn run_stdio() -> io::Result<()> {
             }
             "workspace/symbol" => {
                 let query = json_get_str(&msg, "query").unwrap_or("");
-                let result = workspace_symbols(&docs, query);
+                let index = build_workspace_index(&docs);
+                let result = workspace_symbols_from_index(&index, query);
                 let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
                 write_message(&mut stdout, &body)?;
             }
             "textDocument/references" => {
                 let uri = json_get_str(&msg, "uri").unwrap_or("");
                 let (line, character) = parse_position(&msg);
-                let src = docs.get(uri).map(|s| s.as_str()).unwrap_or("");
-                let result = find_references(uri, src, line, character);
+                let src = source_for_uri(uri, &docs).unwrap_or_default();
+                let index = build_workspace_index(&docs);
+                let result = find_references(&index, uri, &src, line, character);
                 let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
                 write_message(&mut stdout, &body)?;
             }
             "textDocument/signatureHelp" => {
                 let uri = json_get_str(&msg, "uri").unwrap_or("");
                 let (line, character) = parse_position(&msg);
-                let src = docs.get(uri).map(|s| s.as_str()).unwrap_or("");
-                let result = signature_help(src, line, character);
+                let src = source_for_uri(uri, &docs).unwrap_or_default();
+                let index = build_workspace_index(&docs);
+                let result = signature_help(&index, uri, &src, line, character);
+                let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
+                write_message(&mut stdout, &body)?;
+            }
+            "textDocument/inlayHint" => {
+                let uri = json_get_str(&msg, "uri").unwrap_or("");
+                let src = source_for_uri(uri, &docs).unwrap_or_default();
+                let range = parse_range(&msg);
+                let index = build_workspace_index(&docs);
+                let result = inlay_hints(&index, uri, &src, range);
                 let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
                 write_message(&mut stdout, &body)?;
             }
             "textDocument/prepareRename" => {
                 let uri = json_get_str(&msg, "uri").unwrap_or("");
                 let (line, character) = parse_position(&msg);
-                let src = docs.get(uri).map(|s| s.as_str()).unwrap_or("");
-                let result = prepare_rename(uri, src, line, character);
+                let src = source_for_uri(uri, &docs).unwrap_or_default();
+                let index = build_workspace_index(&docs);
+                let result = prepare_rename(&index, uri, &src, line, character);
                 let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
                 write_message(&mut stdout, &body)?;
             }
@@ -1226,8 +1804,9 @@ pub fn run_stdio() -> io::Result<()> {
                 let uri = json_get_str(&msg, "uri").unwrap_or("");
                 let (line, character) = parse_position(&msg);
                 let new_name = json_get_str(&msg, "newName").unwrap_or("");
-                let src = docs.get(uri).map(|s| s.as_str()).unwrap_or("");
-                let result = rename_symbol(uri, src, line, character, new_name);
+                let src = source_for_uri(uri, &docs).unwrap_or_default();
+                let index = build_workspace_index(&docs);
+                let result = rename_symbol(&index, uri, &src, line, character, new_name);
                 let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
                 write_message(&mut stdout, &body)?;
             }
@@ -1252,4 +1831,172 @@ pub fn run_stdio() -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn position_of(src: &str, needle: &str) -> (u32, u32) {
+        let offset = src.find(needle).expect("needle exists");
+        let before = &src[..offset];
+        let line = before.bytes().filter(|b| *b == b'\n').count() as u32;
+        let character = before.rsplit('\n').next().unwrap_or_default().len() as u32;
+        (line, character)
+    }
+
+    fn fixture() -> (PathBuf, String, String, String, WorkspaceIndex) {
+        let root = std::env::temp_dir().join(format!(
+            "mako-lsp-test-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("worker")
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("create fixture");
+        let lib_path = root.join("lib.mko");
+        let app_path = root.join("app.mko");
+        let lib = "fn add(a: int, b: int) -> int {\n    return a + b\n}\n\nfn shadow() -> int {\n    let add = 9\n    return add\n}\n";
+        let app = "pull \"./lib.mko\" as lib\n\nfn make() -> int {\n    return 7\n}\n\nfn main() {\n    let value = lib.add(1, 2)\n    let again = lib.add(value, 3)\n    let made = make()\n    let text = \"ok\"\n    let copied = made\n}\n\nfn local_shadow() {\n    let add = 100\n    let result = add\n}\n";
+        fs::write(&lib_path, lib).expect("write lib");
+        fs::write(&app_path, app).expect("write app");
+        let lib_uri = path_to_uri(&lib_path);
+        let app_uri = path_to_uri(&app_path);
+        let mut open = HashMap::new();
+        open.insert(lib_uri.clone(), lib.to_string());
+        open.insert(app_uri.clone(), app.to_string());
+        let index = build_workspace_index(&open);
+        (root, lib_uri, app_uri, app.to_string(), index)
+    }
+
+    #[test]
+    fn workspace_index_resolves_imported_definition_and_references() {
+        let (root, lib_uri, app_uri, app, index) = fixture();
+        let (line, character) = position_of(&app, "lib.add(1");
+        let add_col = character + 4;
+        let definition =
+            goto_definition_index(&index, &app_uri, &app, line, add_col).expect("definition");
+        assert!(definition.contains(&lib_uri));
+        assert!(definition.contains("\"line\":0"));
+        let hover_result = hover(&index, &app_uri, &app, line, add_col);
+        assert!(hover_result.contains("add(a: int, b: int) -> int"));
+
+        let references = find_references(&index, &app_uri, &app, line, add_col);
+        assert_eq!(references.matches("\"uri\"").count(), 3);
+        assert!(references.contains(&lib_uri));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn workspace_index_normalizes_noncanonical_file_uris() {
+        let (root, _lib_uri, _app_uri, app, _) = fixture();
+        let lib_path = root.join("lib.mko");
+        let app_path = root.join("app.mko");
+        let lib_uri = format!("file://{}", lib_path.display());
+        let app_uri = format!("file://{}", app_path.display());
+        let lib = fs::read_to_string(&lib_path).expect("read lib");
+        let mut open = HashMap::new();
+        open.insert(lib_uri.clone(), lib);
+        open.insert(app_uri.clone(), app.clone());
+        let index = build_workspace_index(&open);
+        let (line, character) = position_of(&app, "lib.add(1");
+        let add_col = character + 4;
+        let definition = goto_definition_index(&index, &app_uri, &app, line, add_col)
+            .expect("definition with raw file URI");
+        assert!(definition.contains(&path_to_uri(&lib_path)));
+        let edit = rename_symbol(&index, &app_uri, &app, line, add_col, "sum");
+        assert!(edit.contains("sum"));
+        assert!(edit.contains(&path_to_uri(&app_path)));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rename_is_project_wide_and_does_not_touch_shadowed_locals() {
+        let (root, lib_uri, app_uri, app, index) = fixture();
+        let (line, character) = position_of(index.docs.get(&lib_uri).unwrap(), "add");
+        let edit = rename_symbol(
+            &index,
+            &lib_uri,
+            index.docs.get(&lib_uri).unwrap(),
+            line,
+            character,
+            "sum",
+        );
+        assert!(edit.contains("\"changes\""));
+        assert!(edit.contains(&lib_uri));
+        assert!(edit.contains(&app_uri));
+        assert!(edit.contains("sum"));
+        assert!(edit.contains("let add = 100"));
+        assert_eq!(
+            rename_symbol(
+                &index,
+                &lib_uri,
+                index.docs.get(&lib_uri).unwrap(),
+                line,
+                character,
+                "fn"
+            ),
+            "null"
+        );
+        let (shadow_line, shadow_start) = position_of(&app, "let add = 100");
+        let shadow_col = shadow_start + 4;
+        assert_eq!(
+            goto_definition_index(&index, &app_uri, &app, shadow_line, shadow_col),
+            None
+        );
+        assert_eq!(
+            prepare_rename(&index, &app_uri, &app, shadow_line, shadow_col),
+            "null"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn signature_help_contains_parameter_metadata_and_active_index() {
+        let (root, _lib_uri, app_uri, app, index) = fixture();
+        let (line, start_character) = position_of(&app, "lib.add(1,");
+        let character = start_character + "lib.add(1,".len() as u32;
+        let result = signature_help(&index, &app_uri, &app, line, character);
+        assert!(result.contains("\"activeParameter\":1"));
+        assert_eq!(result.matches("\"label\"").count(), 3);
+        assert!(result.contains("a: int"));
+        assert!(result.contains("b: int"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn inlay_hints_report_only_confident_inferred_types() {
+        let (root, _lib_uri, app_uri, app, index) = fixture();
+        let hints = inlay_hints(&index, &app_uri, &app, (0, 0, 99, 0));
+        assert!(hints.contains("\"label\":\": int\""));
+        assert!(hints.contains("\"label\":\": string\""));
+        assert!(!hints.contains("\": ?\""));
+        assert_eq!(hints.matches("\"position\"").count(), 7);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn empty_or_invalid_lsp_requests_return_null_without_panicking() {
+        assert_eq!(
+            signature_help(&WorkspaceIndex::default(), "", "", 0, 0),
+            "null"
+        );
+        assert_eq!(
+            prepare_rename(&WorkspaceIndex::default(), "", "", 0, 0),
+            "null"
+        );
+        assert_eq!(
+            rename_symbol(&WorkspaceIndex::default(), "", "", 0, 0, "bad-name"),
+            "null"
+        );
+    }
+
+    #[test]
+    fn full_document_edits_end_at_the_actual_text_position() {
+        assert_eq!(full_doc_end("abc\nxyz"), (1, 3));
+        assert_eq!(full_doc_end("abc\n"), (1, 0));
+        let edit = full_doc_edit("file:///app.mko", "abc\nxyz", "renamed");
+        assert!(edit.contains(r#""line":1,"character":3"#));
+    }
 }

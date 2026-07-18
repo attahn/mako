@@ -71,6 +71,7 @@ const-fn depth (match/while/for/strings) · suite **338 test programs** · [The 
 | Check | Result |
 |-------|--------|
 | `cargo build --release` | PASS |
+| LSP tooling slice | PASS — 6 adversarial unit tests cover import-graph definitions/references/hover, URI-normalized navigation, shadow-safe rename, parameterized signature help, qualified-call inlay hints, and empty/invalid requests |
 | `map[K]Option[T]` / `map[K]Result[T,E]` | PASS — `map_option_result_test` (11 tests) |
 | Security residuals (at-rest, limits, cancel, mTLS, SCRAM cbind) | PASS — `security_residuals_test` |
 | Security product polish (path size, PEM, CSR/self-signed, prom/trace, SCRAM-PLUS helpers) | PASS — `security_product_test` |
@@ -149,7 +150,7 @@ const-fn depth (match/while/for/strings) · suite **338 test programs** · [The 
 | Book samples `mako check` / `run` | PASS — `docs/book/examples/book_*.mko` |
 | `mako test examples/testing` | PASS — **338 passed**, 0 failed (2026-07-17) |
 | GC removal regression checks | PASS — removed builtin and legacy `[package] gc = true` both fail, including isolated cache paths |
-| Speed gate | PASS — normal ≤2.0× and strict ≤1.5× Rust gates; final measured ratios 0.21×–0.65× |
+| Speed gate | PASS — normal ≤2.0× and strict ≤1.5× Rust gates using median-of-3 samples; final measured ratios 0.19×–0.72× |
 | Leba downstream smoke | PASS — current compiler builds/checks Leba; compiled `doctor` reports 0 errors |
 | `if init; cond { }` + both-branches-return body | Done — `examples/testing/if_init_test.mko` |
 | Go `switch`/`case`/`default` (value, expr-less, init) | Done — `examples/testing/switch_test.mko` |

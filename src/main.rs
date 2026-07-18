@@ -338,7 +338,7 @@ enum Commands {
         #[arg(short = 'v', long = "verbose", default_value_t = false)]
         verbose: bool,
     },
-    /// Minimal language server (stdio JSON-RPC: initialize / hover / shutdown)
+    /// Language server (stdio JSON-RPC: diagnostics, navigation, refactoring, hints)
     Lsp,
 }
 
