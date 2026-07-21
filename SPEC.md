@@ -145,24 +145,25 @@ set and (for heap features) the leak coverage.
 ## 8. Status & open work
 
 Done in the shared IR (both backends): scalar CFG, owned strings, `[]int`/
-`[]float`/`[]bool`, `[]string` (Cranelift), **structs**, **tuples**
-(interned as anonymous positional structs; scalar and owned `string`/`[]int`
-elements, including owned multi-return destructuring), **enums with `match`**
-(int, nullary, and owned `string` payloads; each variant gets dedicated
-non-overlapping slots so clone/drop stay flat and null-safe — an enum is a
-`[tag, payload…]` heap
-block reusing the struct machinery; `match` dispatches on the tag and drops an
-owned scrutinee exactly once per arm), and **`string` and `[]int` fields in structs**
-(`StructClone`/`DropStruct` recurse: clone/drop each owned field).
+`[]float`/`[]bool`, `[]string` (Cranelift pointer ABI + LLVM value ABI),
+**structs**, **tuples** (interned as anonymous positional structs; scalar and
+owned `string`/`[]int` elements, including owned multi-return destructuring),
+**enums with `match`** (int, nullary, and owned `string` payloads; each variant
+gets dedicated non-overlapping slots so clone/drop stay flat and null-safe —
+an enum is a `[tag, payload…]` heap block reusing the struct machinery; `match`
+dispatches on the tag and drops an owned scrutinee exactly once per arm;
+owned match results clone/move the payload before that drop), and **owned +
+nested aggregate fields** (`string` / `[]int` / `[]string` / nested structs —
+`StructClone`/`DropStruct` recurse per layout, null-safe).
 
-Open (tracked in [docs/ROADMAP.md](docs/ROADMAP.md) native checklist):
+Open (tracked in [docs/NATIVE_COMPILER_PLAN.md](docs/NATIVE_COMPILER_PLAN.md)):
 
-- LLVM `[]string` lowering; recursive clone/drop.
-- Struct fields of string/slice/struct type; nested owned aggregate layout.
-- Enums, maps, tuples, methods.
-- `defer`, labeled loops, complete `match`, guards.
-- Runtime interop; `crew`/`kick`/`fan`/channels/`select`.
-- Cross/WASM/static/sanitizer/overflow build modes.
+- Slice-typed enum payloads; `bool`/`float` multi-owned enum payloads.
+- Maps, methods, generics (`Option[T]`/`Result[T,E]`).
+- Deeply nested match payload patterns; `if`-as-expression / block expressions.
+- Full runtime archive interop (net/tls/db/wider fmt); `crew`/`kick`/`fan`/channels/`select`.
+- Cross/WASM/static/sanitizer build modes (overflow trap is done on native shared-IR).
+- LLVM `[]float`/`[]bool`.
 - (All known native-backend leaks are now fixed.) Historical notes: the
   string-literal leak was fixed by emitting literals as static `MakoNativeString`
   views (no malloc, no drop); the slice-view header leak was fixed by returning
